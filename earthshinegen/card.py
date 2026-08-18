@@ -80,6 +80,12 @@ SCHEMA = [
      "(fixed a, b) or 'none'"),
     ('rock_density', float, 2.65,
      'overburden density [g/cm^3]'),
+    ('ms_model', str, 'none',
+     "multiple scattering in the rock: 'none' or 'highland'.  'none' is the "
+     "default so that existing samples reproduce; see the README before "
+     "turning it on"),
+    ('rock_radiation_length', float, 26.54,
+     'radiation length of the overburden [g/cm^2]; 26.54 is standard rock'),
 
     # --- rate ------------------------------------------------------------
     ('decay_length_convention', str, 'total',
@@ -170,6 +176,9 @@ def _validate(v):
         raise ValueError('m_X (%g) must exceed m_A (%g)' % (v['m_X'], v['m_A']))
     if v['epsilon'] <= 0:
         raise ValueError('epsilon must be positive')
+    if v['rock_radiation_length'] <= 0:
+        raise ValueError('rock_radiation_length must be positive, got %g'
+                         % v['rock_radiation_length'])
     if v['n_events'] <= 0:
         raise ValueError('n_events must be positive')
     if v['depth_min'] > v['depth_max']:
@@ -180,6 +189,7 @@ def _validate(v):
     for key, allowed in (('dm_model', ('core', 'floating', 'monoenergetic')),
                          ('depth_sampling', ('exponential', 'uniform')),
                          ('eloss_model', ('running', 'constant', 'none')),
+                         ('ms_model', ('none', 'highland')),
                          ('stage', ('detector', 'vertex')),
                          ('kappa_method', ('fast', 'dblquad')),
                          ('require_hit', ('none', 'detector',
@@ -257,7 +267,8 @@ def write_template(path):
                       'inner_detector_radius', 'inner_detector_half_length',
                       'handoff_radius', 'handoff_half_length', 'require_hit',
                       'require_both_muons', 'min_momentum', 'min_pt')),
-        ('propagation', ('eloss_model', 'rock_density')),
+        ('propagation', ('eloss_model', 'rock_density', 'ms_model',
+                         'rock_radiation_length')),
         ('rate', ('decay_length_convention', 'livetime_years',
                   'kappa_method')),
         ('output', ('stage', 'output_file', 'report_file', 'include_initial',

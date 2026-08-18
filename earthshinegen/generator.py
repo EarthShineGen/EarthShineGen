@@ -10,7 +10,10 @@ Two output stages, selected by the card:
 
   stage = 'vertex'  the record is the decay itself: vertex at the A' decay
                     point in the rock, muon momenta undegraded.  Exact, and
-                    the right thing to feed to an acceptance study.
+                    the right thing to feed to an acceptance study.  Multiple
+                    scattering happens after the decay, so it never touches
+                    these momenta; with ms_model on it still moves the
+                    acceptance, because it decides which decays are kept.
 
   stage = 'detector'
                     the record is what arrives: the muon momenta after the
@@ -95,7 +98,61 @@ def throw_batch(n, p, rate_info, rng):
     return {'origins': origins, 'parents': parents, 'mu1': mu1, 'mu2': mu2}
 
 
-def select_batch(batch, p, counters):
+def trajectories(batch, p, handoff_r, handoff_hl, rng):
+    """Where each muon's straight-line flight starts, and along what direction.
+
+    Without multiple scattering the answer is trivial: the muon leaves the decay
+    point along its production direction and never turns.  With `ms_model
+    highland` the trajectory gets one kink, at `eloss.PIVOT_FRACTION` of the way
+    to the hand-off surface, chosen so that a single deflection reproduces both
+    the RMS arrival angle and the RMS lateral offset of scattering spread
+    continuously along the path.
+
+    That needs the path length before it can draw the deflection, and the
+    deflection then changes the path length, so it is done in two passes: the
+    first pass measures the unscattered path, the second re-does the geometry
+    from the kink.  The residual inconsistency is second order in the deflection
+    and far below the Gaussian-core approximation itself.
+
+    Returns (start, direction, rock_before) per muon tag, where `rock_before` is
+    the rock already crossed on the way to the kink.
+    """
+    origins = batch['origins']
+    n = origins.shape[0]
+    start, direction, rock_before = {}, {}, {}
+
+    for tag in ('mu1', 'mu2'):
+        p3 = batch[tag][:, :3]
+        if p['ms_model'] == 'none':
+            start[tag] = origins
+            direction[tag] = p3
+            rock_before[tag] = np.zeros(n)
+            continue
+
+        pmag = np.linalg.norm(p3, axis=1)
+        u = p3 / pmag[:, None]
+
+        # Pass 1: the unscattered path to the hand-off surface.  A muon that
+        # misses it on the straight ray can still scatter into it, so rather
+        # than dropping it we use its distance to the detector centre as a
+        # stand-in for the path it would cross.
+        pts, _ = geo.ray_cylinder_intersection(origins, u, handoff_r, handoff_hl)
+        path = geo.path_length(origins, pts)
+        path = np.where(np.isfinite(path), path, np.linalg.norm(origins, axis=1))
+
+        sigma = eloss.scattering_sigma(pmag, path,
+                                       model=p['eloss_model'],
+                                       density=p['rock_density'],
+                                       x0_g_per_cm2=p['rock_radiation_length'])
+
+        rock_before[tag] = eloss.PIVOT_FRACTION * path
+        start[tag] = origins + rock_before[tag][:, None] * u
+        direction[tag] = eloss.scatter_directions(u, sigma, rng)
+
+    return start, direction, rock_before
+
+
+def select_batch(batch, p, counters, rng):
     """Propagate and apply the selection to one batch.
 
     Returns a dict of the per-event quantities for the accepted events.
@@ -106,11 +163,13 @@ def select_batch(batch, p, counters):
     counters.decay_ok += n
 
     handoff_r, handoff_hl = card_mod.resolve_handoff(p)
+    start, direction, rock_before = trajectories(batch, p, handoff_r,
+                                                 handoff_hl, rng)
 
     entry = {}
     reached = np.ones(n, dtype=bool)
-    for tag, p4 in (('mu1', batch['mu1']), ('mu2', batch['mu2'])):
-        pts, _ = geo.ray_cylinder_intersection(origins, p4[:, :3],
+    for tag in ('mu1', 'mu2'):
+        pts, _ = geo.ray_cylinder_intersection(start[tag], direction[tag],
                                                handoff_r, handoff_hl)
         entry[tag] = pts
         reached &= ~np.isnan(pts[:, 0])
@@ -122,9 +181,17 @@ def select_batch(batch, p, counters):
     degraded = {}
     survived = np.ones(n, dtype=bool)
     for tag in ('mu1', 'mu2'):
-        dist = geo.path_length(origins, entry[tag])
+        dist = rock_before[tag] + geo.path_length(start[tag], entry[tag])
         dist = np.where(np.isfinite(dist), dist, 0.0)
-        p4, alive = eloss.degrade(batch[tag], dist,
+        # The energy loss keeps the direction it is handed, so the scattered
+        # direction has to be substituted here for the arriving momentum to
+        # point the right way.
+        p4_in = batch[tag]
+        if p['ms_model'] != 'none':
+            pmag = np.linalg.norm(p4_in[:, :3], axis=1)
+            p4_in = np.column_stack([direction[tag] * pmag[:, None],
+                                     p4_in[:, 3]])
+        p4, alive = eloss.degrade(p4_in, dist,
                                   model=p['eloss_model'],
                                   density=p['rock_density'])
         degraded[tag] = p4
@@ -133,9 +200,9 @@ def select_batch(batch, p, counters):
     survived &= reached
     counters.survived_eloss += int(survived.sum())
 
-    # Geometric requirement, evaluated on the propagated momenta at the
-    # hand-off surface: the direction is unchanged by the average energy loss,
-    # so the same straight line is used.
+    # Geometric requirement, evaluated along the same trajectory: the average
+    # energy loss does not bend the muon, so the straight line out of the kink
+    # is the one that has to reach the detector.
     if p['require_hit'] == 'none':
         hit = np.ones(n, dtype=bool)
     else:
@@ -146,7 +213,7 @@ def select_batch(batch, p, counters):
             half_len = p['inner_detector_half_length']
         hits = []
         for tag in ('mu1', 'mu2'):
-            pts, _ = geo.ray_cylinder_intersection(origins, batch[tag][:, :3],
+            pts, _ = geo.ray_cylinder_intersection(start[tag], direction[tag],
                                                    radius, half_len)
             hits.append(~np.isnan(pts[:, 0]))
         hit = (hits[0] & hits[1]) if p['require_both_muons'] else (hits[0] | hits[1])
@@ -198,7 +265,7 @@ def run(p, rate_info, rng, writer, log=sys.stdout):
     while written < target:
         n = BATCH
         batch = throw_batch(n, p, rate_info, rng)
-        sel = select_batch(batch, p, counters)
+        sel = select_batch(batch, p, counters, rng)
 
         n_avail = sel['origins'].shape[0]
         n_take = min(n_avail, target - written)

@@ -23,9 +23,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+from earthshinegen import card                    # noqa: E402
 from earthshinegen import constants as k          # noqa: E402
 from earthshinegen import darkphoton as dp        # noqa: E402
 from earthshinegen import eloss                   # noqa: E402
+from earthshinegen import generator as gen        # noqa: E402
 from earthshinegen import geometry as geo         # noqa: E402
 from earthshinegen import kinematics as kin       # noqa: E402
 from earthshinegen import planet as pl            # noqa: E402
@@ -233,6 +235,134 @@ def test_degrade_preserves_direction():
     approx(after, before, 1e-9, 'energy loss changed the direction')
 
 
+@test
+def test_scattering_sigma_matches_analytic_highland():
+    """With no energy loss p is constant, so the integral must collapse to the
+    textbook theta_0 = (Es/p) sqrt(L/X0) (1 + 0.038 ln(L/X0))."""
+    p_mu = np.array([10.0, 100.0, 1000.0, 5000.0])
+    L = np.array([50.0, 200.0, 700.0, 1500.0])
+    x0 = eloss.radiation_length_m()
+
+    got = eloss.scattering_sigma(p_mu, L, model='none')
+    n_rad = L / x0
+    beta_p = p_mu ** 2 / np.sqrt(p_mu ** 2 + k.MUON_MASS ** 2)
+    want = (eloss.HIGHLAND_ES / beta_p) * np.sqrt(n_rad) \
+        * (1.0 + 0.038 * np.log(n_rad))
+    approx(got, want, 1e-12, 'scattering_sigma is not Highland at constant p')
+
+
+@test
+def test_scattering_sigma_grows_when_the_muon_softens():
+    """Losing energy along the way can only increase the deflection.
+
+    The paths stay inside the muon's range: past the stopping point there is no
+    muon left to scatter, so sigma saturates rather than growing.
+    """
+    p_mu = np.full(4, 5000.0)
+    L = np.array([100.0, 300.0, 700.0, 1200.0])
+    frozen = eloss.scattering_sigma(p_mu, L, model='none')
+    losing = eloss.scattering_sigma(p_mu, L, model='running')
+    assert np.all(losing > frozen), \
+        'energy loss did not increase the scattering angle'
+    assert np.all(np.diff(losing) > 0), 'sigma is not monotonic in path length'
+    assert np.all(losing <= 0.5 * np.pi + 1e-12), 'sigma exceeded its cap'
+
+
+@test
+def test_scattering_sigma_scales_as_expected():
+    """sigma ~ 1/p at fixed path, and ~sqrt(L) up to the log term."""
+    sig_p = eloss.scattering_sigma(np.array([100.0, 1000.0]),
+                                   np.array([200.0, 200.0]), model='none')
+    approx(sig_p[0] / sig_p[1], 10.0, 1e-3, 'sigma does not scale as 1/p')
+
+    sig_l = eloss.scattering_sigma(np.array([1000.0, 1000.0]),
+                                   np.array([100.0, 400.0]), model='none')
+    x0 = eloss.radiation_length_m()
+    logs = (1.0 + 0.038 * np.log(400.0 / x0)) / (1.0 + 0.038 * np.log(100.0 / x0))
+    approx(sig_l[1] / sig_l[0], 2.0 * logs, 1e-9, 'sigma does not scale as sqrt(L)')
+
+
+@test
+def test_scatter_directions_have_the_right_spread():
+    rng = np.random.default_rng(31)
+    n = 40000
+    u = geo.unit(rng.normal(size=(n, 3)))
+    sigma = np.full(n, 2.0e-3)
+    v = eloss.scatter_directions(u, sigma, rng)
+
+    approx(np.linalg.norm(v, axis=1), np.ones(n), 1e-12,
+           'scattered directions are not unit vectors')
+    # The space angle between u and v is sigma * sqrt(2) in RMS.
+    cos = np.clip(np.sum(u * v, axis=1), -1.0, 1.0)
+    rms = np.sqrt(np.mean(np.arccos(cos) ** 2))
+    approx(rms, 2.0e-3 * np.sqrt(2.0), 0.02,
+           'scattered space angle has the wrong RMS')
+    # No preferred transverse direction.
+    assert abs(np.mean(np.sum((v - u) * u, axis=1))) < 1e-4, \
+        'scattering is not transverse on average'
+
+
+@test
+def test_scattering_off_is_bit_for_bit_unchanged():
+    """ms_model 'none' must leave the trajectory exactly as it was."""
+    rng = np.random.default_rng(32)
+    n = 500
+    batch = {'origins': np.column_stack([rng.uniform(-40, 40, n),
+                                         rng.uniform(-2000, -50, n),
+                                         rng.uniform(-40, 40, n)]),
+             'mu1': np.zeros((n, 4)), 'mu2': np.zeros((n, 4))}
+    for tag in ('mu1', 'mu2'):
+        p3 = rng.normal(size=(n, 3)) * 500.0
+        batch[tag] = np.column_stack(
+            [p3, np.sqrt(np.sum(p3 ** 2, axis=1) + k.MUON_MASS ** 2)])
+
+    p = card.resolve(overrides={'ms_model': 'none'})
+    start, direction, before = gen.trajectories(batch, p, 7.5, 15.0, rng)
+    for tag in ('mu1', 'mu2'):
+        approx(start[tag], batch['origins'], 0.0, 'ms none moved the start point')
+        approx(direction[tag], batch[tag][:, :3], 0.0,
+               'ms none changed the direction')
+        approx(before[tag], np.zeros(n), 0.0, 'ms none added rock to the path')
+
+
+@test
+def test_scattering_deflects_and_kinks_the_trajectory():
+    rng = np.random.default_rng(33)
+    n = 4000
+    # Straight up from well below the detector, so every muon has a long path.
+    origins = np.column_stack([rng.uniform(-3, 3, n),
+                               np.full(n, -800.0),
+                               rng.uniform(-3, 3, n)])
+    # Half of a 7 TeV dark matter mass, so the muon is still stiff on arrival
+    # after ~800 m of rock; a muon near the end of its range scatters by tens
+    # of milliradians, which is correct but useless as a regression bound.
+    p3 = np.column_stack([np.zeros(n), np.full(n, 3500.0), np.zeros(n)])
+    p4 = np.column_stack([p3, np.sqrt(np.sum(p3 ** 2, axis=1) + k.MUON_MASS ** 2)])
+    batch = {'origins': origins, 'mu1': p4, 'mu2': p4}
+
+    p = card.resolve(overrides={'ms_model': 'highland'})
+    start, direction, before = gen.trajectories(batch, p, 7.5, 15.0, rng)
+
+    # The kink sits at PIVOT_FRACTION of the way to the hand-off surface.  A
+    # vertical ray from x hits the curved surface at y = -sqrt(R^2 - x^2), so
+    # the unscattered path depends on where in the disk the decay happened.
+    path = np.linalg.norm(start['mu1'] - origins, axis=1)
+    expected = eloss.PIVOT_FRACTION * (800.0 - np.sqrt(7.5 ** 2 - origins[:, 0] ** 2))
+    approx(path, expected, 1e-6, 'the kink is in the wrong place')
+    approx(before['mu1'], path, 1e-9, 'rock_before disagrees with the kink')
+
+    # Directions are deflected, unit, and still mostly upward.
+    approx(np.linalg.norm(direction['mu1'], axis=1), np.ones(n), 1e-12,
+           'scattered directions are not unit vectors')
+    deflection = np.arccos(np.clip(direction['mu1'][:, 1], -1.0, 1.0))
+    assert np.all(deflection > 0), 'nothing was deflected'
+    assert np.median(deflection) < 0.02, \
+        'median deflection of %.3g rad is implausibly large' % np.median(deflection)
+    # The two muons scatter independently even though they start identical.
+    assert not np.allclose(direction['mu1'], direction['mu2']), \
+        'both muons got the same deflection'
+
+
 # ---------------------------------------------------------------------------
 # geometry
 # ---------------------------------------------------------------------------
@@ -403,6 +533,8 @@ def test_end_to_end_every_model_and_stage():
         ['--depth_sampling', 'uniform'],
         ['--eloss_model', 'constant'],
         ['--eloss_model', 'none'],
+        ['--ms_model', 'highland'],
+        ['--ms_model', 'highland', '--stage', 'vertex'],
         ['--require_hit', 'inner_detector', '--depth_min', '-500'],
         ['--require_both_muons', '1'],
         ['--decay_length_convention', 'darkcappy'],

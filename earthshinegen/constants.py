@@ -94,6 +94,7 @@ DARKPHOTON_PDGID = 4900022     # hidden-valley photon convention
 ROCK_DENSITY = 2.65            # g/cm^3
 ROCK_A_IONIZATION = 2.0e-3     # GeV / (g/cm^2)
 ROCK_B_RADIATIVE = 4.0e-6      # (g/cm^2)^-1
+ROCK_X0 = 26.54                # radiation length of standard rock, g/cm^2
 
 
 ################################################################

@@ -44,6 +44,8 @@ min_pt                       0.0                      # minimum muon transverse 
 #----------------------------------------------------------------------
 eloss_model                  running                  # 'running' (a, b run with log10 E; PDG 2004 standard rock), 'constant' (fixed a, b) or 'none'
 rock_density                 2.65                     # overburden density [g/cm^3]
+ms_model                     none                     # multiple scattering in the rock: 'none' or 'highland'.  'none' is the default so that existing samples reproduce; see the README before turning it on
+rock_radiation_length        26.54                    # radiation length of the overburden [g/cm^2]; 26.54 is standard rock
 
 #----------------------------------------------------------------------
 # rate

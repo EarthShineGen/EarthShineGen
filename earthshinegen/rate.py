@@ -101,6 +101,8 @@ def compute(p, verbose=False):
         'handoff_radius_m': handoff_radius,
         'handoff_half_length_m': handoff_half_length,
         'require_hit': p['require_hit'],
+        'eloss_model': p['eloss_model'],
+        'ms_model': p['ms_model'],
         'rate_in_volume_per_s': rate_in_volume,
         'livetime_years': p['livetime_years'],
     }
@@ -181,6 +183,14 @@ def format_report(rate_info, mc=None, params=None):
     add('  hand-off surface             %14.6g m radius, %.6g m half length'
         % (r['handoff_radius_m'], r['handoff_half_length_m']))
     add('  acceptance requirement       %14s' % r['require_hit'])
+    add('')
+    add('Propagation through the rock')
+    add('  energy loss                  %14s' % r['eloss_model'])
+    add('  multiple scattering          %14s' % r['ms_model'])
+    if r['ms_model'] != 'none':
+        add('  NOTE: the acceptance below depends on the scattering model, so '
+            'it is')
+        add('        no longer a pure geometric number.')
     add('')
     add('Decay and geometry')
     add('  decay length L               %14.6g cm  (%.4g km)'

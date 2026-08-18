@@ -119,8 +119,74 @@ bit-for-bit the parameterisation the standard cosmic muon generators use, so
 samples compare like for like against existing single-muon productions.
 `constant` uses fixed coefficients. EarthShine's GEANT4-derived splines are not
 carried: they need a large pickle, and the published acceptance numbers use the
-average loss. As in EarthShine, multiple scattering is not simulated, so the
-muon direction is unchanged by the propagation.
+average loss.
+
+**Multiple scattering is available, and it is not a small correction.**
+EarthShine does not simulate it at all. `ms_model highland` does; see the next
+section for why it matters and why it is nevertheless off by default.
+
+## Multiple scattering
+
+`ms_model` is `none` by default, so existing samples reproduce bit for bit.
+`highland` turns on multiple Coulomb scattering in the overburden.
+
+The RMS projected angle is integrated along the path rather than evaluated at a
+single momentum, because the muon softens as it goes and the scattering piles up
+at the far end:
+
+```
+sigma^2 = (1 + 0.038 ln(L/X0))^2  int_0^L (13.6 MeV / (beta p(x)))^2 dx / X0
+```
+
+`p(x)` comes from whichever `eloss_model` is in force, so the two cannot drift
+apart. `rock_radiation_length` sets `X0` and defaults to standard rock,
+26.54 g/cm^2.
+
+The trajectory gets one kink rather than a stepped transport, placed at
+`1 - 1/sqrt(3)` of the way to the hand-off surface. A single deflection at that
+fraction reproduces both the RMS arrival angle and the RMS lateral offset of
+scattering spread continuously along the path, and it keeps the whole batch
+vectorised. Finding the kink needs the path length, and the kink then changes
+the path length, so the geometry is done in two passes.
+
+### How big it is
+
+On the default card, `m_X = 7000 GeV`, for the muons that get accepted:
+
+| | median | 90th pct |
+| --- | --- | --- |
+| path in rock | 722 m | 1335 m |
+| `sigma_theta` per muon | 0.65 mrad | 2.8 mrad |
+| lateral offset at arrival | 0.21 m | 0.95 m |
+
+Two scales to compare against. The detector subtends about 10 mrad from a 722 m
+path, so the acceptance moves by a few percent: 0.0338 to 0.0310, an 8% relative
+drop, at that parameter point. But the `A'` opening angle is only
+`m_A/E` ~ 0.2 mrad, so the scattering is several times larger than the decay
+itself, and the pair invariant mass at the hand-off surface goes from
+
+```
+ms_model none        median 0.225 GeV     99.8% below 1 GeV
+ms_model highland    median 1.381 GeV     32.5% below 1 GeV
+```
+
+The resonance does not survive the rock. If you are fitting or cutting on the
+dimuon mass of what arrives, this is the difference between a narrow peak and a
+broad continuum, and it is the reason the option exists.
+
+### What it does not do
+
+Highland is the Gaussian core. At the thousands of radiation lengths involved
+the single-hard-scatter tail is not a small correction to it, so treat the
+result as a floor on the deflection rather than a full description. That is why
+the default is `none`: the numbers above should be checked against a GEANT4
+reference before anything downstream depends on them.
+
+Turning it on also makes the reported acceptance depend on the scattering model
+rather than on geometry alone. The report says so when `ms_model` is not `none`.
+
+`stage vertex` momenta are untouched either way, since the scattering happens
+after the decay; but it still changes which decays are accepted.
 
 ## The two stages
 
