@@ -187,9 +187,8 @@ def alpha_thermal(m_X, m_A):
 def alpha_max(m_X):
     """The largest alpha_X allowed by CMB distortion bounds.
 
-    The parameterisation alpha_X^max = 0.17 (m_X/TeV)^1.61 is the one used for
-    the rate tables in the analysis note; it comes from Slatyer's CMB limit as
-    quoted by Feng et al.
+    The parameterisation alpha_X^max = 0.17 (m_X/TeV)^1.61 comes from Slatyer's
+    CMB limit as quoted by Feng et al.
     """
     return 0.17 * (m_X / 1000.0) ** 1.61
 

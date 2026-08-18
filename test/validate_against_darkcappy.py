@@ -67,8 +67,10 @@ def check_array(name, ours, theirs, tol=TOLERANCE):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--darkcappy',
-                    default='/home/users/tvami/EarthAsDM/DarkCapPy',
-                    help='path to the DarkCapPy checkout')
+                    default=os.environ.get('DARKCAPPY_DIR', '../DarkCapPy'),
+                    help='path to a DarkCapPy checkout '
+                         '(https://github.com/agree019/DarkCapPy); '
+                         'defaults to $DARKCAPPY_DIR, else ../DarkCapPy')
     ap.add_argument('--masses', type=float, nargs='+',
                     default=[100.0, 1000.0, 7000.0],
                     help='m_X points to test [GeV]')

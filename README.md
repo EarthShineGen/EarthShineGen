@@ -9,8 +9,8 @@ It merges two existing packages:
 
 | from | what it contributes |
 | --- | --- |
-| [DarkCapPy](../DarkCapPy) | the "cross section": capture rate, annihilation rate, Sommerfeld enhancement, dark photon decay length, and hence the absolute rate of muon pairs |
-| [EarthShine](../EarthShine) | the kinematics: decay points in the rock, the two-body decay, propagation through the overburden, the detector geometry |
+| [DarkCapPy](https://github.com/agree019/DarkCapPy) | the "cross section": capture rate, annihilation rate, Sommerfeld enhancement, dark photon decay length, and hence the absolute rate of muon pairs |
+| [EarthShine](https://github.com/mattbellis/EarthShine) | the kinematics: decay points in the rock, the two-body decay, propagation through the overburden, the detector geometry |
 
 The detector is described entirely by the parameter card, so nothing here is
 tied to a particular experiment. The output is a Les Houches event file, so it
@@ -75,14 +75,14 @@ the generation volume goes as `exp(+d/L)` in depth `d` below the detector: the
 deep end is favoured, because a decay near the surface had to survive further.
 EarthShineGen samples that directly (`depth_sampling exponential`, the
 default), which is what makes this a merge of the two packages rather than a
-concatenation. It also removes the depth-grid reweighting that the analysis
-note carries in `Appendix_DMModels.tex`, along with its 27% closure
-uncertainty: there is no depth grid any more, and no interpolation between one.
-`depth_sampling uniform` reproduces the old behaviour for comparison.
+concatenation. Sampling the profile also removes the need to throw decays on a
+grid of depths and reweight between them, and with it the closure uncertainty
+that interpolation costs. `depth_sampling uniform` reproduces the older
+behaviour for comparison.
 
-For the parameter points the analysis sits at, `L` is ~10^5 km against a 4 km
-volume, so the exponential is uniform to a part in 10^4. The difference only
-appears at large `epsilon`, where `L` shrinks as `1/epsilon^2`.
+At small `epsilon`, `L` is ~10^5 km against a 4 km volume, so the exponential is
+uniform to a part in 10^4. The difference only appears at large `epsilon`, where
+`L` shrinks as `1/epsilon^2`.
 
 **The branching ratio enters twice, and DarkCapPy only used it once.**
 DarkCapPy's `decayLength(m_X, m_A, epsilon, BR)` is `gamma c BR / Gamma_ee`,
@@ -221,9 +221,12 @@ The build runs a ten-event smoke test before packing.
 ## Tests
 
 ```bash
-./test/run_tests.py                     # 28 tests, numpy + scipy only
-./test/validate_against_darkcappy.py    # needs pandas as well
+./test/run_tests.py                     # numpy + scipy only
+./test/validate_against_darkcappy.py    # needs pandas and a DarkCapPy checkout
 ```
+
+The comparison script looks for DarkCapPy in `$DARKCAPPY_DIR`, falling back to
+`../DarkCapPy`; `--darkcappy PATH` overrides both.
 
 `run_tests.py` covers the decay kinematics, the depth sampling against its
 analytic mean, the energy loss against the EarthShine reference, the geometry,
@@ -257,6 +260,13 @@ test/                      self-tests and the DarkCapPy comparison
 ```
 
 ## References
+
+### Upstream packages
+
+* DarkCapPy — https://github.com/agree019/DarkCapPy
+* EarthShine — https://github.com/mattbellis/EarthShine
+
+### Papers
 
 * Feng, Smolinsky, Tanedo, *Dark photons from the centre of the Earth*,
   [arXiv:1509.07525](https://arxiv.org/abs/1509.07525)

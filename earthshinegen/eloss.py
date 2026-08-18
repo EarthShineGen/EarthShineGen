@@ -99,9 +99,9 @@ def degrade(p4, distance_m, model='running', density=k.ROCK_DENSITY,
     """Apply the energy loss to a set of four-vectors, keeping the direction.
 
     The average-loss treatment has no angular component -- EarthShine does not
-    simulate multiple scattering either, and the analysis note says so -- so the
-    direction is preserved and only the magnitude is rescaled.  Returns the
-    degraded four-vectors and a boolean mask of the muons that survived.
+    simulate multiple scattering either -- so the direction is preserved and
+    only the magnitude is rescaled.  Returns the degraded four-vectors and a
+    boolean mask of the muons that survived.
     """
     E_final = propagate(p4[:, 3], distance_m, model=model, density=density)
     survived = E_final > mass

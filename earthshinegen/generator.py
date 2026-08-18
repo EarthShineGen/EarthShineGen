@@ -26,8 +26,8 @@ Two output stages, selected by the card:
     are written as comment lines (see lhe.py), so a consumer that wants the
     true two-vertex topology has the numbers and one that does not gets a
     sensible single vertex.  At the opening angles involved the two crossings
-    are centimetres apart, but the analysis is a dimuon analysis, so the
-    numbers are kept rather than thrown away.
+    are centimetres apart, but the muon separation at entry is a physical
+    observable, so the numbers are kept rather than thrown away.
 """
 
 import sys

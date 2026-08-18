@@ -38,7 +38,7 @@ def sample_depths_exponential(n, depth_min, depth_max, decay_length_cm, rng):
 
     evaluated through logaddexp so that d_hi/L of a few hundred does not
     overflow.  When the slab is much shorter than L this reduces to the uniform
-    case to machine precision, which is the regime the analysis has been in.
+    case to machine precision, which is the regime at small epsilon.
     """
     d_lo = min(abs(depth_min), abs(depth_max)) * CM_PER_M     # shallow edge, cm
     d_hi = max(abs(depth_min), abs(depth_max)) * CM_PER_M     # deep edge, cm
