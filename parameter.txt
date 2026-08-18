@@ -1,0 +1,64 @@
+# EarthShineGen parameter card
+#
+# One "key  value" pair per line.  Anything after a # is a
+# comment.  Edit by name, e.g.
+#     sed -i "s|^m_X .*|m_X  10000|" parameter.txt
+
+#----------------------------------------------------------------------
+# dark sector
+#----------------------------------------------------------------------
+m_X                          7000.0                   # dark matter mass [GeV]
+m_A                          0.23                     # dark photon mass [GeV]
+epsilon                      1e-08                    # kinetic mixing between the photon and the dark photon
+alpha_X                      max                      # dark fine structure constant: 'thermal', 'max', or a number
+alpha_em                     0.0072992700729927005    # electromagnetic fine structure constant
+
+#----------------------------------------------------------------------
+# generation
+#----------------------------------------------------------------------
+n_events                     1000                     # number of accepted events to write
+seed                         0                        # random seed; 0 draws one from the OS and records it
+dm_model                     core                     # 'core', 'floating' or 'monoenergetic'
+depth_min                    -4000.0                  # deep edge of the generation volume [m], negative, below the detector
+depth_max                    -8.0                     # shallow edge of the generation volume [m], negative
+disk_radius                  40                       # radius of the generation cylinder [m], or 'auto' for the angle-based value
+depth_sampling               exponential              # 'exponential' (from the dark photon decay length) or 'uniform'
+max_trials                   0                        # cap on thrown events; 0 means keep throwing until n_events are accepted
+
+#----------------------------------------------------------------------
+# detector
+#----------------------------------------------------------------------
+detector_radius              7.5                      # outer detector radius [m]
+detector_half_length         15.0                     # outer detector half length along z [m]
+inner_detector_radius        1.0                      # inner detector radius [m]
+inner_detector_half_length   2.5                      # inner detector half length along z [m]
+handoff_radius               auto                     # radius of the surface the muons are delivered on [m], or 'auto' to use detector_radius
+handoff_half_length          auto                     # half length of that surface along z [m], or 'auto' to use detector_half_length
+require_hit                  detector                 # acceptance requirement: 'none', 'detector' or 'inner_detector'
+require_both_muons           0                        # if 1, both muons must satisfy the acceptance requirement, not just one
+min_momentum                 10.0                     # minimum muon momentum on arrival at the detector [GeV]
+min_pt                       0.0                      # minimum muon transverse momentum on arrival at the detector [GeV]
+
+#----------------------------------------------------------------------
+# propagation
+#----------------------------------------------------------------------
+eloss_model                  running                  # 'running' (a, b run with log10 E; PDG 2004 standard rock), 'constant' (fixed a, b) or 'none'
+rock_density                 2.65                     # overburden density [g/cm^3]
+
+#----------------------------------------------------------------------
+# rate
+#----------------------------------------------------------------------
+decay_length_convention      total                    # 'total' (BR_ee sets the width, BR_mumu scales the yield) or 'darkcappy' (reproduce the notebook: BR_mumu in the decay length, no explicit yield factor)
+livetime_years               1.0                      # live time the quoted rate refers to [yr]
+kappa_method                 fast                     # 'fast' (analytic recoil integral) or 'dblquad' (DarkCapPy's quadrature)
+
+#----------------------------------------------------------------------
+# output
+#----------------------------------------------------------------------
+stage                        detector                 # 'detector' (propagate to the hand-off surface) or 'vertex' (decay point)
+output_file                  events.lhe               # output LHE file
+report_file                  earthshinegen_report.txt # human-readable rate report; '' to skip
+include_initial              1                        # write two mock incoming particles into each event
+include_mother               1                        # write the A' as a status-2 intermediate particle
+beam_energy                  6800.0                   # beam energy quoted in the <init> block [GeV]
+verbose                      0                        # print per-stage diagnostics

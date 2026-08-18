@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""EarthShineGen -- dark Earthshine dimuon event generator.
+
+Merges the capture/annihilation rate calculation of DarkCapPy with the
+underground muon kinematics of EarthShine into one executable that writes a
+Les Houches event file for CMSSW.
+
+Run with no arguments to use ./parameter.txt:
+
+    ./EarthShineGen
+
+Or point it at a card and override anything on the command line:
+
+    ./EarthShineGen --card mycard.txt --m_X 10000 --n_events 50000
+
+Or ask only for the rate, without generating events:
+
+    ./EarthShineGen --report-only
+
+Or write a fresh, fully commented card:
+
+    ./EarthShineGen --write-card parameter.txt
+"""
+
+import argparse
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+from earthshinegen import card as card_mod          # noqa: E402
+from earthshinegen import rate as rate_mod          # noqa: E402
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog='EarthShineGen',
+        description=__doc__.split('\n')[1],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='Every parameter card key is also a command-line option; the '
+               'command line wins.')
+    parser.add_argument('--card', default=None,
+                        help='parameter card (default: ./parameter.txt if it '
+                             'exists, otherwise built-in defaults)')
+    parser.add_argument('--write-card', metavar='PATH', default=None,
+                        help='write a commented card at the defaults and exit')
+    parser.add_argument('--report-only', action='store_true',
+                        help='compute and print the rate, generate nothing')
+    parser.add_argument('--version', action='version',
+                        version='EarthShineGen 1.0.0')
+
+    group = parser.add_argument_group('parameter card overrides')
+    for name, typ, default, help_text in card_mod.SCHEMA:
+        group.add_argument('--' + name, type=typ, default=None,
+                           metavar=typ.__name__.upper(),
+                           help='%s (default: %s)' % (help_text, default))
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.write_card:
+        card_mod.write_template(args.write_card)
+        print('wrote %s' % args.write_card)
+        return 0
+
+    card_path = args.card
+    if card_path is None and os.path.exists('parameter.txt'):
+        card_path = 'parameter.txt'
+
+    overrides = dict((name, getattr(args, name))
+                     for name, _, _, _ in card_mod.SCHEMA)
+    params = card_mod.resolve(card_path, overrides)
+
+    print('EarthShineGen 1.0.0')
+    if card_path:
+        print('parameter card: %s' % card_path)
+    print('m_X = %g GeV, m_A = %g GeV, epsilon = %g, model = %s, stage = %s'
+          % (params['m_X'], params['m_A'], params['epsilon'],
+             params['dm_model'], params['stage']))
+    print('')
+
+    if args.report_only:
+        info = rate_mod.compute(params, verbose=bool(params['verbose']))
+        report = rate_mod.format_report(info, params=params)
+        sys.stdout.write(report)
+        if params['report_file']:
+            with open(params['report_file'], 'w') as fh:
+                fh.write(report)
+            print('wrote %s' % params['report_file'])
+        return 0
+
+    # Imported here so that --write-card and --help stay instant, and so a
+    # missing numpy is reported against the run rather than against --help.
+    from earthshinegen import generator
+
+    rate_info, mc, counters = generator.generate(params)
+
+    report = rate_mod.format_report(rate_info, mc=mc, params=params)
+    sys.stdout.write('\n' + report)
+    if params['report_file']:
+        with open(params['report_file'], 'w') as fh:
+            fh.write(report)
+        print('wrote %s' % params['report_file'])
+
+    if mc['n_accepted'] == 0:
+        sys.stderr.write('ERROR: no events passed the selection\n')
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

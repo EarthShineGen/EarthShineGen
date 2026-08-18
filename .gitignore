@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.lhe
+earthshinegen_report.txt
+gridpack_workdir/
+*.tar.xz
