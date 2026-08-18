@@ -63,9 +63,10 @@ ProductionFilterSequence = cms.Sequence(generator)
 #      This is a few dozen lines and gives the single-vertex topology.
 #
 #   2. For the exact two-vertex topology, consume '#vertex_mu1' and
-#      '#vertex_mu2' and place each muon at its own point.  The two crossings
-#      are centimetres apart at these opening angles, so this only matters if
-#      the analysis is sensitive to the muon separation at entry.
+#      '#vertex_mu2' and place each muon at its own point.  With ms_model
+#      'none' the two crossings are a couple of centimetres apart and option 1
+#      is close enough; with ms_model 'highland' they are typically half a
+#      metre apart and can be several metres, so option 2 is required.
 #
 # Until such a producer exists, run with
 #

@@ -174,6 +174,28 @@ The resonance does not survive the rock. If you are fitting or cutting on the
 dimuon mass of what arrives, this is the difference between a narrow peak and a
 broad continuum, and it is the reason the option exists.
 
+The same thing shows up as the separation between the two muons where they
+cross the hand-off surface, after a median flight of ~700 m:
+
+| separation | 10% | median | 90% | 99% |
+| --- | --- | --- | --- | --- |
+| `none` | 0.3 cm | 1.7 cm | 3.9 cm | 9.5 cm |
+| `highland` | 2.6 cm | 54.5 cm | 3.76 m | 10.7 m |
+
+A factor of 31 on the median. Without scattering every pair lands inside 10 cm;
+with it, only 22% do and a third are more than a metre apart. As an angle that
+is 0.025 mrad against 0.835 mrad, the latter being the expected `sqrt(2) *
+sigma_theta` for two independently scattered muons.
+
+This is what breaks the single-vertex approximation: `#vertex` at the midpoint
+of the two crossings is a good stand-in for both muons at 2 cm and a poor one
+at half a metre. A GEN-SIM job running with `ms_model highland` should read
+`#vertex_mu1` and `#vertex_mu2` rather than `#vertex`.
+
+The table comes from running the generator twice at the same seed and reading
+the two crossing points back out of the `#vertex_mu1` and `#vertex_mu2` comment
+lines.
+
 ### What it does not do
 
 Highland is the Gaussian core. At the thousands of radiation lengths involved

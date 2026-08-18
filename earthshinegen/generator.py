@@ -28,9 +28,11 @@ Two output stages, selected by the card:
     vertex is written at the midpoint of the two crossings and both crossings
     are written as comment lines (see lhe.py), so a consumer that wants the
     true two-vertex topology has the numbers and one that does not gets a
-    sensible single vertex.  At the opening angles involved the two crossings
-    are centimetres apart, but the muon separation at entry is a physical
-    observable, so the numbers are kept rather than thrown away.
+    sensible single vertex.  Without scattering the two crossings are a couple
+    of centimetres apart and the midpoint is a good approximation to both; with
+    ms_model highland the median separation is around half a metre and the tail
+    runs to several metres, so the single vertex stops being adequate and a
+    consumer really does have to read the per-muon lines.
 """
 
 import sys
