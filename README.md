@@ -341,7 +341,7 @@ earthshinegen/
 data/
   PREM500_Mod.csv          Earth structure and composition
   EarthDMVelDist.csv       dark matter velocity distribution
-  br_mumu.csv              BR(A' -> mu mu), digitised from Feng et al.
+  br_mumu.csv              BR(A' -> mu mu), digitised from Buschmann  et al.
   br_ee.csv                BR(A' -> e e)
 gridpack/                  gridpack build, runcmsgrid drivers, CMSSW fragments
 test/                      self-tests and the DarkCapPy comparison
@@ -361,3 +361,4 @@ test/                      self-tests and the DarkCapPy comparison
 * Green, Rentala et al., DarkCapPy, [arXiv:1812.07573](https://arxiv.org/abs/1812.07573)
 * Leane et al., [arXiv:2209.09834](https://arxiv.org/abs/2209.09834) (the crust,
   or "floating", distribution)
+* Buschmann, Kopp, Liu, Machado, *Lepton Jets from Radiating Dark Matter*, [arXiv:1505.07459](https://arxiv.org/abs/1505.07459)
