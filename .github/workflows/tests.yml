@@ -38,10 +38,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `cache: pip`: it needs a requirements.txt or pyproject.toml to build
+      # a cache key, and this package deliberately has neither -- it is a
+      # standalone executable on numpy and scipy, not a pip install.  The two
+      # wheels take a few seconds anyway.
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
 
       - name: install numpy and scipy
         run: python -m pip install --upgrade pip numpy scipy
@@ -64,7 +67,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-          cache: pip
 
       - name: install numpy, scipy and HepMC3
         run: |
