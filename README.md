@@ -14,11 +14,11 @@ It merges two existing packages:
 
 The detector is described entirely by the parameter card, and the only
 dependencies are numpy and scipy, so nothing here is tied to a particular
-experiment. It writes Les Houches events, which drop into the standard gridpack
-path the same way BlackMax and Charybdis do, and HepMC 2 or 3, which -- unlike
-LHE -- can say where each of the two muons entered the detector.
+experiment. It writes Les Houches events and HepMC 2 or 3; HepMC -- unlike LHE
+-- can say where each of the two muons entered the detector.
 
-Everything experiment-specific, CMSSW included, lives in a separate repository:
+Nothing in this repository mentions an experiment. Everything that does --
+CMSSW cfgs, the GEN-SIM step, the gridpack build -- lives in
 [InterfaceWithExperiments](https://github.com/EarthShineGen/InterfaceWithExperiments).
 
 ## Quick start
@@ -234,8 +234,8 @@ Two caveats for the `detector` stage:
 * The two muons cross the surface at two different points, and **LHE** has one
   vertex per event. In the LHE file the event vertex is written at their
   midpoint, and all three positions plus the decay point go into comment lines
-  that `LHEEventProduct::comments()` preserves. See `gridpack/run3_fragment.py`
-  for what a vertex producer needs to do with them. **A GEN-SIM job that does
+  that `LHEEventProduct::comments()` preserves. See `cmssw/gridpack/run3_fragment.py`
+  in the interface repository for what a vertex producer needs to do with them. **A GEN-SIM job that does
   not read them will put the muons at the interaction point flying outward,
   which is not the signal.** The **HepMC** file has no such problem: each muon
   carries its own production vertex and CMSSW reads them with no extra code.
@@ -332,7 +332,7 @@ defaults.
 
 `./EarthShineGen --write-card parameter.txt` writes every parameter at its
 default with a one-line explanation. It is a `key  value` file, not a
-positional one, so the gridpack scripts edit it by name:
+positional one, so it can be edited by name rather than by line number:
 
 ```bash
 sed -i "s|^m_X .*|m_X  10000|" parameter.txt
@@ -343,25 +343,16 @@ card. `./EarthShineGen --help` lists them.
 
 ## Gridpacks
 
-Same shape as the BlackMax and Charybdis gridpacks in
-`~/BlackHole/test_exo_bh_gridpacks`. Nothing is compiled, so the build is quick.
+Gridpacks are a CMS thing -- `ExternalLHEProducer`, `cmsrel`, McM -- so the
+build script and the fragments live in
+[InterfaceWithExperiments](https://github.com/EarthShineGen/InterfaceWithExperiments),
+under `cmssw/gridpack/`. It stages this package into a tarball and needs
+nothing from here but the path:
 
 ```bash
-cd gridpack
-
-# generic: the parameter point is passed at run time through the fragment
-./earthshinegen_gridpack.sh run3
-
-# specific: the point is baked into parameter.txt
-./earthshinegen_gridpack.sh run3 7000 0.23 1e-8 max core
+export EARTHSHINEGEN=$PWD/EarthShineGen
+.../InterfaceWithExperiments/cmssw/gridpack/earthshinegen_gridpack.sh run3
 ```
-
-That produces `earthshinegen_gridpack_run3.tar.xz` containing `runcmsgrid.sh`
-and the `EarthShineGen/` tree. `gridpack/earthshinegen.py` is the
-`ExternalLHEProducer` snippet for the generic case and
-`gridpack/run3_fragment.py` is the GEN fragment.
-
-The build runs a ten-event smoke test before packing.
 
 ## Tests
 
@@ -429,7 +420,6 @@ data/
   EarthDMVelDist.csv       dark matter velocity distribution
   br_mumu.csv              BR(A' -> mu mu), digitised from Buschmann  et al.
   br_ee.csv                BR(A' -> e e)
-gridpack/                  gridpack build, runcmsgrid drivers, CMSSW fragments
 test/
   run_tests.py             the self-tests; numpy and scipy only
   validate_against_darkcappy.py
