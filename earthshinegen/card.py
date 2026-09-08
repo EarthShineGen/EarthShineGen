@@ -101,15 +101,15 @@ SCHEMA = [
     ('stage', str, 'detector',
      "'detector' (propagate to the hand-off surface) or 'vertex' (decay point)"),
     ('output_format', str, 'both',
-     "'lhe', 'hepmc' or 'both'; HepMC is what CMSSW's MCFileSource reads, and "
-     'it is the only one of the two that can carry a vertex per muon'),
+     "'lhe', 'hepmc' or 'both'; HepMC is the one of the two that can carry a "
+     'production vertex per muon'),
     ('output_file', str, 'events.lhe',
      'output LHE file'),
     ('hepmc_file', str, 'events.hepmc',
      'output HepMC file'),
     ('hepmc_version', str, '2',
-     "'2' (IO_GenEvent ASCII; the only one CMSSW reads from a file) or "
-     "'3' (Asciiv3; Rivet and the HepMC3 tools)"),
+     "'2' (IO_GenEvent ASCII, what most detector simulations read from a "
+     "file) or '3' (Asciiv3, for Rivet and the HepMC3 tools)"),
     ('hepmc_topology', str, 'split',
      "'split' (each muon produced at its own crossing of the hand-off "
      "surface) or 'single' (one vertex, the LHE record one for one)"),

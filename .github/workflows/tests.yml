@@ -1,10 +1,5 @@
 name: tests
 
-# Kept deliberately small.  GitHub Actions is free without limit on public
-# repositories, but the budget that actually matters is the reviewer's
-# patience, so: no cron, nothing on documentation-only changes, in-flight runs
-# for a branch cancelled when a new commit lands, and two Python versions
-# rather than the whole matrix -- the oldest supported and the current one.
 on:
   push:
     branches: [main]

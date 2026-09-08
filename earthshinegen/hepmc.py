@@ -9,16 +9,14 @@ the topology is expressible directly.
 
 Two output flavours, selected by `version`:
 
-  '2'  HepMC 2, the `HepMC::IO_GenEvent` ASCII flavour.  This is the one CMSSW
-       reads: `MCFileSource` (IOMC/Input) opens the file with
-       `HepMC::IO_GenEvent` and there is no HepMC3 file input source in the
-       release, only HepMC3 hadronizer interfaces.
-  '3'  HepMC 3, the `HepMC::Asciiv3` flavour, which is what Rivet, the HepMC3
-       tools and most non-CMS consumers want.
+  '2'  HepMC 2, the `HepMC::IO_GenEvent` ASCII flavour.  Still the format most
+       detector simulations read from a file, which is why it is the default.
+  '3'  HepMC 3, the `HepMC::Asciiv3` flavour, which is what Rivet and the
+       HepMC3 tools want.
 
-Both are written by hand rather than through a binding, because the gridpack
-runtime has numpy and scipy and nothing else.  The event is built once, in
-`_build`, and the two writers differ only in how they lay it out.
+Both are written by hand rather than through a binding, because the only
+dependencies here are numpy and scipy.  The event is built once, in `_build`,
+and the two writers differ only in how they lay it out.
 
 Units are GeV and mm.  Positions arrive in metres and are converted here, the
 same convention lhe.py uses for its comment lines.
@@ -37,11 +35,11 @@ The record, for `stage = detector` and the default `split` topology:
     V-4   the same for muon 2
 
 Four-momentum is deliberately not conserved at V-3 and V-4: that difference is
-the energy the muon left in the rock.  HepMC does not check, and Pythia is not
-in this chain (see gridpack/mcfilesource_fragment.py), so nothing rejects it.
-The status-1 muons -- the only particles GEANT will track -- therefore start
-exactly on the hand-off surface with exactly the arriving momenta, which is the
-thing LHE could not express.
+the energy the muon left in the rock.  HepMC does not check, and there is no
+parton shower in this chain, so nothing rejects it.  The status-1 muons -- the
+only ones a detector simulation will track -- therefore start exactly on the
+hand-off surface with exactly the arriving momenta, which is the thing LHE
+could not express.
 
 With `topology = single` the record collapses to one vertex at the midpoint of
 the two crossings, reproducing the LHE event one for one.  That is an escape
@@ -72,23 +70,22 @@ HEPMC3_VERSION_LINE = 'HepMC::Version 3.03.01\n'
 HEPMC3_START_KEY = 'HepMC::Asciiv3-START_EVENT_LISTING\n'
 HEPMC3_END_KEY = 'HepMC::Asciiv3-END_EVENT_LISTING\n'
 
-# Status codes, in the sense SimG4Core/Generators/src/Generator.cc gives them:
+# Status codes, in the sense a detector simulation reads them:
 #
-#   1  not decayed by the generator; GEANT tracks it from its production vertex
-#   2  decayed by the generator but GEANT must still propagate it, and if its
-#      end vertex is outside the beampipe (r > RDecLenCut, 2.9 cm) it is handed
-#      to GEANT with a predefined decay
-#   3  decayed by the generator, GEANT must NOT propagate it
+#   1  not decayed by the generator; it is tracked from its production vertex
+#   2  decayed by the generator, but still propagated, and handed over with a
+#      predefined decay if its end vertex is far enough out
+#   3  decayed by the generator, and must NOT be propagated
 #   4  beam particle
 #
-# The intermediates here are 3, not the 2 that a collider generator would use,
-# and the difference is not cosmetic.  The A' and the muons as produced live at
-# the decay point, a kilometre underground and far outside any CMS volume; with
-# status 2 GEANT would take them as primaries and try to track them from there,
-# because their end vertices are indeed outside the beampipe.  Status 3 says
-# what is actually true -- the generator has already done that propagation --
-# so GEANT starts the two status-1 muons at the hand-off surface and nothing
-# else.  The codes 1-4 mean the same in HepMC 3.
+# The intermediates here are 3, not the 2 a collider generator would use, and
+# the difference is not cosmetic.  The A' and the muons as produced live at the
+# decay point, a kilometre underground and far outside any detector volume, and
+# their end vertices are metres off axis -- exactly the condition under which a
+# status-2 particle gets taken as a primary and tracked from where it starts.
+# Status 3 says what is actually true, that the generator has already done that
+# propagation, so only the two status-1 muons at the hand-off surface are
+# tracked.  The codes mean the same in HepMC 3.
 STATUS_BEAM = 4
 STATUS_INTERMEDIATE = 3
 STATUS_FINAL = 1
@@ -360,7 +357,7 @@ class _HepMCWriterBase(object):
 
 
 class HepMC2Writer(_HepMCWriterBase):
-    """HepMC 2, the IO_GenEvent ASCII flavour.  What CMSSW reads."""
+    """HepMC 2, the IO_GenEvent ASCII flavour."""
 
     VERSION_LINE = HEPMC2_VERSION_LINE
     START_KEY = HEPMC2_START_KEY
@@ -384,8 +381,8 @@ class HepMC2Writer(_HepMCWriterBase):
     def _particle_line(particle):
         # 15 significant digits for the same reason lhe.py uses them: these are
         # TeV muons with a 105 MeV mass, so E^2 - p^2 is a difference of two
-        # numbers that agree to nine digits, and both HepMC and GEANT read the
-        # mass back off the four-vector.
+        # numbers that agree to nine digits, and readers recover the mass from
+        # the four-vector.
         p = particle.p4
         return ('P %d %d %+.15e %+.15e %+.15e %+.15e %+.15e %d 0 0 %d 0\n'
                 % (particle.barcode, particle.pdg, p[0], p[1], p[2], p[3],
@@ -419,8 +416,8 @@ class HepMC2Writer(_HepMCWriterBase):
 class HepMC3Writer(_HepMCWriterBase):
     """HepMC 3, the Asciiv3 flavour.  For Rivet and the HepMC3 tools.
 
-    CMSSW cannot read this from a file -- the release has no HepMC3 input
-    source -- so `hepmc_version 3` is for everything that is not CMSSW.
+    Detector simulations are generally still on HepMC 2 for file input, so
+    `hepmc_version 2` remains the default and this is for everything else.
     """
 
     VERSION_LINE = HEPMC3_VERSION_LINE

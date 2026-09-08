@@ -35,8 +35,8 @@ Two output stages, selected by the card:
     consumer really does have to read the per-muon lines.
 
     The HepMC output (hepmc.py) has no such caveat: each muon is produced at
-    its own crossing, and CMSSW reads that with no extra code.  output_format
-    selects one format or both.
+    its own crossing, and a detector simulation reads that directly.
+    output_format selects one format or both.
 """
 
 import sys

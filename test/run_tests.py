@@ -680,7 +680,7 @@ def test_hepmc_record_is_self_consistent():
 
     for ev in events:
         assert ev['units'] == ('GEV', 'MM'), \
-            'units line is %r, CMSSW expects GEV MM' % (ev['units'],)
+            'units line is %r, readers expect GEV MM' % (ev['units'],)
         assert len(ev['vertices']) == ev['n_vertices'], \
             'the E line claims %d vertices, the file has %d' \
             % (ev['n_vertices'], len(ev['vertices']))
@@ -697,14 +697,14 @@ def test_hepmc_record_is_self_consistent():
             approx(np.sqrt(max(m2, 0.0)), p['mass'], 1e-4,
                    'the HepMC mass field disagrees with the four-vector')
 
-        # Nothing but the two arriving muons may be status 1 or 2.  CMSSW's
-        # SimG4Core hands GEANT every status-2 particle whose end vertex is
-        # outside the beampipe, which here would mean tracking a muon from a
+        # Nothing but the two arriving muons may be status 1 or 2.  A detector
+        # simulation propagates status-2 particles whose end vertex is far
+        # enough off axis, which here would mean tracking a muon from a
         # kilometre underground; the intermediates are status 3 to say that the
         # generator has already done that propagation.
         for p in ev['particles']:
             assert p['status'] in (1, 3, 4), \
-                'particle %d has status %d; GEANT would try to propagate it' \
+                'particle %d has status %d; it would be propagated' \
                 % (p['barcode'], p['status'])
 
         muons = _final_muons(ev)

@@ -6,9 +6,8 @@
 #   ./test/hepmc3/check_with_hepmc3.sh [file.hepmc3]
 #
 # With no argument a small sample is generated first.  Needs HepMC3 on the
-# system, found in this order: HepMC3-config on PATH, HEPMC3_DIR, a cvmfs CMSSW
-# external, a distribution install (libhepmc3-dev).  On a machine with cvmfs,
-# `cmsenv` in any CMSSW area is enough.
+# system, found in this order: HepMC3-config on PATH, HEPMC3_DIR, a cvmfs
+# software distribution, a distribution install (libhepmc3-dev).
 #
 # With no HepMC3 anywhere this exits 0 with a SKIP, so it can be dropped into a
 # test run on a machine that does not have it.  Set REQUIRE_HEPMC3=1 -- as CI
@@ -31,15 +30,16 @@ if [ -z "${CONFIG}" ] && [ -n "${HEPMC3_DIR:-}" ]; then
     CONFIG="${HEPMC3_DIR}/bin/HepMC3-config"
 fi
 if [ -z "${CONFIG}" ] || [ ! -x "${CONFIG}" ]; then
-    # cvmfs.  The arch has to be pinned: the tree carries ppc64le and aarch64
-    # builds too, and picking one of those gets you an "incompatible library,
-    # cannot find -lHepMC3" from the linker rather than anything informative.
-    # CMSSW spells x86_64 as amd64 in its arch strings; uname does not.
+    # cvmfs.  The platform has to be pinned: the tree carries ppc64le and
+    # aarch64 builds alongside the x86_64 one, and picking the wrong one gets
+    # you an "incompatible library, cannot find -lHepMC3" from the linker
+    # rather than anything informative.  It also spells x86_64 as amd64, which
+    # uname does not.
     case "$(uname -m)" in
-        x86_64) cms_machine=amd64 ;;
-        *)      cms_machine=$(uname -m) ;;
+        x86_64) machine=amd64 ;;
+        *)      machine=$(uname -m) ;;
     esac
-    for arch in "${SCRAM_ARCH:-}" "el9_${cms_machine}_gcc14" "el8_${cms_machine}_gcc14"; do
+    for arch in "${SCRAM_ARCH:-}" "el9_${machine}_gcc14" "el8_${machine}_gcc14"; do
         [ -n "${arch}" ] || continue
         CONFIG=$(ls -d "/cvmfs/cms.cern.ch/${arch}/external/hepmc3/"*/bin/HepMC3-config \
                  2>/dev/null | tail -1 || true)
