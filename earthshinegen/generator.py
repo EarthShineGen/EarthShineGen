@@ -23,16 +23,20 @@ Two output stages, selected by the card:
                     this a drop-in replacement for a fixed-momentum cosmic muon
                     generator whose vertices sit on the same target surface.
 
-    A caveat that the format forces: the two muons cross the hand-off surface
-    at two different points, and LHE has one vertex per event.  The event
-    vertex is written at the midpoint of the two crossings and both crossings
-    are written as comment lines (see lhe.py), so a consumer that wants the
-    true two-vertex topology has the numbers and one that does not gets a
-    sensible single vertex.  Without scattering the two crossings are a couple
-    of centimetres apart and the midpoint is a good approximation to both; with
+    A caveat the LHE format forces: the two muons cross the hand-off surface at
+    two different points, and LHE has one vertex per event.  The event vertex
+    is written at the midpoint of the two crossings and both crossings are
+    written as comment lines (see lhe.py), so a consumer that wants the true
+    two-vertex topology has the numbers and one that does not gets a sensible
+    single vertex.  Without scattering the two crossings are a couple of
+    centimetres apart and the midpoint is a good approximation to both; with
     ms_model highland the median separation is around half a metre and the tail
     runs to several metres, so the single vertex stops being adequate and a
     consumer really does have to read the per-muon lines.
+
+    The HepMC output (hepmc.py) has no such caveat: each muon is produced at
+    its own crossing, and a detector simulation reads that directly.
+    output_format selects one format or both.
 """
 
 import sys
@@ -248,6 +252,10 @@ def select_batch(batch, p, counters, rng):
                     else batch['mu1'])[idx],
         'mu2_out': (degraded['mu2'] if p['stage'] == 'detector'
                     else batch['mu2'])[idx],
+        # The momenta as produced in the decay, before the rock takes its cut.
+        # LHE has nowhere to put them; HepMC gives them their own vertex.
+        'mu1_raw': batch['mu1'][idx],
+        'mu2_raw': batch['mu2'][idx],
         'mu1_entry': entry['mu1'][idx],
         'mu2_entry': entry['mu2'][idx],
         'mu1_distance': degraded['mu1_distance'][idx],
@@ -255,8 +263,14 @@ def select_batch(batch, p, counters, rng):
     }
 
 
-def run(p, rate_info, rng, writer, log=sys.stdout):
-    """Fill `writer` with p['n_events'] accepted events.  Returns the counters."""
+def run(p, rate_info, rng, writers, log=sys.stdout):
+    """Fill every writer with p['n_events'] accepted events.
+
+    `writers` is a list because the card can ask for LHE and HepMC at once.
+    Every writer sees the same events in the same order, and none of them
+    touches the random stream, so the sample does not depend on which formats
+    were requested.  Returns the counters.
+    """
     counters = Counters()
     target = p['n_events']
     max_trials = p['max_trials'] or 0
@@ -279,9 +293,13 @@ def run(p, rate_info, rng, writer, log=sys.stdout):
             else:
                 vertex = sel['origins'][i]
                 v1 = v2 = None
-            writer.write_event(sel['mu1_out'][i], sel['mu2_out'][i],
-                               vertex_m=vertex, vertex1_m=v1, vertex2_m=v2,
-                               decay_vertex_m=sel['origins'][i])
+            for writer in writers:
+                writer.write_event(sel['mu1_out'][i], sel['mu2_out'][i],
+                                   vertex_m=vertex, vertex1_m=v1,
+                                   vertex2_m=v2,
+                                   decay_vertex_m=sel['origins'][i],
+                                   p1_raw=sel['mu1_raw'][i],
+                                   p2_raw=sel['mu2_raw'][i])
         written += n_take
 
         if max_trials and counters.thrown >= max_trials:
@@ -351,15 +369,10 @@ def generate(p, log=sys.stdout):
                   "not provide for a crust distribution.  Treat the quoted "
                   "rate as core-model.\n" % p['dm_model'])
 
-    header = _header(p, rate_info)
-    with LHEWriter(p['output_file'], header,
-                   xsec_pb=rate_info['rate_in_volume_per_s'] * k.yr2s(1.0),
-                   xsec_err_pb=0.0, max_weight=1.0,
-                   beam_energy=p['beam_energy'],
-                   include_initial=bool(p['include_initial']),
-                   include_mother=bool(p['include_mother'])) as writer:
-        counters = run(p, rate_info, rng, writer, log=log)
-        n_written = writer.n_events
+    writers = _open_writers(p, rate_info)
+    try:
+        counters = run(p, rate_info, rng, writers, log=log)
+        n_written = writers[0].n_events
 
         eff, err = efficiency_with_error(counters)
         mc = rate_mod.observable_rate(rate_info, eff)
@@ -370,19 +383,60 @@ def generate(p, log=sys.stdout):
         # XSECUP has no meaning for a beamless signal, but downstream tooling
         # reads it, so it carries the observable rate in events per year of
         # live time -- the number the report quotes -- rather than a
-        # placeholder.
-        writer.update_cross_section(mc['rate_per_year'],
-                                    mc['rate_per_year'] * err
-                                    / max(eff, 1e-300))
+        # placeholder.  The HepMC cross-section line carries the same number.
+        for writer in writers:
+            writer.update_cross_section(mc['rate_per_year'],
+                                        mc['rate_per_year'] * err
+                                        / max(eff, 1e-300))
+    finally:
+        for writer in writers:
+            writer.close()
 
     log.write('\n%s\n' % counters.report())
-    log.write('\nwrote %d events to %s\n' % (n_written, p['output_file']))
+    for writer in writers:
+        log.write('\nwrote %d events to %s\n' % (n_written, writer.path))
     return rate_info, mc, counters
 
 
-def _header(p, rate_info):
-    """The <header> block: enough to reconstruct the run from the file alone."""
-    from .lhe import header_block
+def _open_writers(p, rate_info):
+    """One writer per requested output format.
+
+    The LHE writer comes first when both are asked for, so that
+    `output_format both` leaves the LHE file byte for byte what
+    `output_format lhe` would have produced.
+    """
+    xsec = rate_info['rate_in_volume_per_s'] * k.yr2s(1.0)
+    fields = _header_fields(p, rate_info)
+    writers = []
+
+    if p['output_format'] in ('lhe', 'both'):
+        from .lhe import header_block
+        writers.append(LHEWriter(
+            p['output_file'], header_block(fields),
+            xsec_pb=xsec, xsec_err_pb=0.0, max_weight=1.0,
+            beam_energy=p['beam_energy'],
+            include_initial=bool(p['include_initial']),
+            include_mother=bool(p['include_mother'])))
+
+    if p['output_format'] in ('hepmc', 'both'):
+        from .hepmc import HepMCWriter
+        writers.append(HepMCWriter(
+            p['hepmc_file'], fields,
+            version=p['hepmc_version'],
+            xsec_pb=xsec, xsec_err_pb=0.0, max_weight=1.0,
+            topology=p['hepmc_topology'],
+            include_initial=bool(p['include_initial']),
+            include_mother=bool(p['include_mother'])))
+
+    return writers
+
+
+def _header_fields(p, rate_info):
+    """Enough metadata to reconstruct the run from the output file alone.
+
+    Rendered as an XML-ish block in the LHE <header> and as comment lines ahead
+    of the HepMC event listing; the content is the same either way.
+    """
     fields = dict((key, p[key]) for key in sorted(p))
     fields.update({
         'kappa_0_GeV5': '%.8g' % rate_info['kappa_0'],
@@ -394,4 +448,4 @@ def _header(p, rate_info):
         'pairs_in_volume_per_s': '%.8g' % rate_info['rate_in_volume_per_s'],
         'disk_radius_m': '%.8g' % rate_info['disk_radius_m'],
     })
-    return header_block(fields)
+    return fields

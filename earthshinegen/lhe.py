@@ -1,7 +1,7 @@
 """Les Houches Event output.
 
-Adapted from EarthShine's event_writer.write_lhe, trimmed to what the gridpack
-needs and extended so that the per-muon entry points survive into the file.
+Adapted from EarthShine's event_writer.write_lhe, trimmed to what is actually
+needed and extended so that the per-muon entry points survive into the file.
 
 The LHE format has no field for a production vertex, which matters here because
 the whole point of the signal is a pair of muons entering the detector from
@@ -118,13 +118,20 @@ class LHEWriter(object):
         self._fh.seek(here)
 
     def write_event(self, p1, p2, vertex_m, vertex1_m=None, vertex2_m=None,
-                    decay_vertex_m=None, weight=1.0):
+                    decay_vertex_m=None, p1_raw=None, p2_raw=None,
+                    weight=1.0):
         """Write one A' -> mu+ mu- event.
 
         p1, p2      four-momenta (px, py, pz, E) in GeV
         vertex_m    the event vertex in metres (detector frame)
         vertex1_m, vertex2_m, decay_vertex_m
                     optional extra positions recorded as comment lines
+        p1_raw, p2_raw
+                    the muon momenta before the energy loss.  Accepted and
+                    ignored: LHE has one vertex per event and so no place to
+                    put the undegraded pair.  The HepMC writer uses them, and
+                    the two writers take the same arguments so the event loop
+                    does not have to know which is which.
         """
         p1 = np.asarray(p1, dtype=float)
         p2 = np.asarray(p2, dtype=float)

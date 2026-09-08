@@ -14,7 +14,7 @@ available and both solve  -dE/dx = a + b E  analytically:
 
 EarthShine can also sample the loss from GEANT4-derived splines, which needs a
 several-hundred-megabyte pickle.  That is deliberately not carried here: a
-gridpack has to be self-contained and small, and the average loss is what the
+package has to be self-contained and small, and the average loss is what the
 published acceptance numbers use.
 
 The second half of the file is multiple Coulomb scattering, which EarthShine
@@ -76,7 +76,7 @@ def propagate_running(E0, distance_m, density=k.ROCK_DENSITY):
     which is what the reference implementations do.  Muons whose energy would
     go negative have stopped; they are returned as zero rather than as a
     negative energy, which is the one place this differs from EarthShine's
-    eloss_average.propagate_muon_CMSSW.
+    eloss_average propagation routine.
     """
     E0 = np.asarray(E0, dtype=float)
     x = water_equivalent(distance_m, density)

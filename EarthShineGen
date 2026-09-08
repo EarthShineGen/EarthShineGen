@@ -2,8 +2,8 @@
 """EarthShineGen -- dark Earthshine dimuon event generator.
 
 Merges the capture/annihilation rate calculation of DarkCapPy with the
-underground muon kinematics of EarthShine into one executable that writes a
-Les Houches event file for CMSSW.
+underground muon kinematics of EarthShine into one executable that writes
+Les Houches and HepMC event files.
 
 Run with no arguments to use ./parameter.txt:
 

@@ -1,10 +1,9 @@
 """The parameter card.
 
-BlackMax and Charybdis are driven by a positional parameter.txt that the
-gridpack edits with `sed -i '8s/.*/${MD}/'`.  That works, but it means the
-gridpack scripts encode line numbers and break the moment a comment is added.
-EarthShineGen uses a `key  value` card instead, so the gridpack edits it by
-name:
+BlackMax and Charybdis are driven by a positional parameter.txt that their
+driver scripts edit with `sed -i '8s/.*/${MD}/'`.  That works, but it means
+those scripts encode line numbers and break the moment a comment is added.
+EarthShineGen uses a `key  value` card instead, so it is edited by name:
 
     sed -i "s|^m_X .*|m_X  ${MX}|" parameter.txt
 
@@ -100,8 +99,19 @@ SCHEMA = [
     # --- output ----------------------------------------------------------
     ('stage', str, 'detector',
      "'detector' (propagate to the hand-off surface) or 'vertex' (decay point)"),
+    ('output_format', str, 'both',
+     "'lhe', 'hepmc' or 'both'; HepMC is the one of the two that can carry a "
+     'production vertex per muon'),
     ('output_file', str, 'events.lhe',
      'output LHE file'),
+    ('hepmc_file', str, 'events.hepmc',
+     'output HepMC file'),
+    ('hepmc_version', str, '2',
+     "'2' (IO_GenEvent ASCII, what most detector simulations read from a "
+     "file) or '3' (Asciiv3, for Rivet and the HepMC3 tools)"),
+    ('hepmc_topology', str, 'split',
+     "'split' (each muon produced at its own crossing of the hand-off "
+     "surface) or 'single' (one vertex, the LHE record one for one)"),
     ('report_file', str, 'earthshinegen_report.txt',
      "human-readable rate report; '' to skip"),
     ('include_initial', int, 1,
@@ -191,6 +201,9 @@ def _validate(v):
                          ('eloss_model', ('running', 'constant', 'none')),
                          ('ms_model', ('none', 'highland')),
                          ('stage', ('detector', 'vertex')),
+                         ('output_format', ('lhe', 'hepmc', 'both')),
+                         ('hepmc_topology', ('split', 'single')),
+                         ('hepmc_version', ('2', '3')),
                          ('kappa_method', ('fast', 'dblquad')),
                          ('require_hit', ('none', 'detector',
                                           'inner_detector')),
@@ -271,8 +284,10 @@ def write_template(path):
                          'rock_radiation_length')),
         ('rate', ('decay_length_convention', 'livetime_years',
                   'kappa_method')),
-        ('output', ('stage', 'output_file', 'report_file', 'include_initial',
-                    'include_mother', 'beam_energy', 'verbose')),
+        ('output', ('stage', 'output_format', 'output_file', 'hepmc_file',
+                    'hepmc_version', 'hepmc_topology', 'report_file',
+                    'include_initial', 'include_mother', 'beam_energy',
+                    'verbose')),
     ]
     with open(path, 'w') as fh:
         fh.write('# EarthShineGen parameter card\n'

@@ -2,7 +2,7 @@
 
 EarthShine draws the decay with `phasespace`, which pulls in TensorFlow.  For a
 two-body decay of a spin-averaged resonance that is a very expensive way to
-sample an isotropic direction, and TensorFlow is not something a gridpack
+sample an isotropic direction, and TensorFlow is not something the runtime
 should have to carry, so the decay is done here in closed form.
 
 Coordinates are the detector frame throughout: +y is up, +z is along the axis

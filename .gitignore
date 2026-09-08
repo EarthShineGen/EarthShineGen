@@ -1,10 +1,11 @@
 __pycache__/
 *.pyc
+
+# generator output
 *.lhe
+*.hepmc
+*.hepmc3
 earthshinegen_report.txt
-gridpack_workdir/
-*.tar.xz
-# scratch CMSSW area the gridpack build scrams into
-CMSSW_*/
+
 # local measurement scripts and their figures; not part of the package
 study/

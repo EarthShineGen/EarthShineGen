@@ -25,6 +25,11 @@ from scipy import integrate
 from . import constants as k
 from .planet import earth
 
+# numpy 2 renamed trapz to trapezoid and removed the old name.  Both have to
+# work: a fresh pip install gets numpy 2, while the older analysis environments
+# this has to run inside still ship numpy 1.
+_trapezoid = getattr(np, 'trapezoid', None) or np.trapz
+
 
 ################################################################
 # Nuclear form factor and kinematics
@@ -108,7 +113,7 @@ def _kappa0_shell_integrals_fast(element, m_X, planet, n_u=4000):
     inner = np.where(emax > emin, inner, 0.0)
 
     integrand = inner * u * planet.f_cross(u)
-    return np.trapz(integrand, u, axis=1)
+    return _trapezoid(integrand, u, axis=1)
 
 
 def _kappa0_shell_integrals_dblquad(element, m_X, planet):

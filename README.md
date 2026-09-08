@@ -12,9 +12,10 @@ It merges two existing packages:
 | [DarkCapPy](https://github.com/agree019/DarkCapPy) | the "cross section": capture rate, annihilation rate, Sommerfeld enhancement, dark photon decay length, and hence the absolute rate of muon pairs |
 | [EarthShine](https://github.com/mattbellis/EarthShine) | the kinematics: decay points in the rock, the two-body decay, propagation through the overburden, the detector geometry |
 
-The detector is described entirely by the parameter card, so nothing here is
-tied to a particular experiment. The output is a Les Houches event file, so it
-drops into the standard gridpack path the same way BlackMax and Charybdis do.
+The detector is described entirely by the parameter card, and the only
+dependencies are numpy and scipy, so nothing here is tied to a particular
+experiment. It writes Les Houches events and HepMC 2 or 3; HepMC -- unlike LHE
+-- can say where each of the two muons entered the detector.
 
 ## Quick start
 
@@ -26,7 +27,9 @@ drops into the standard gridpack path the same way BlackMax and Charybdis do.
 ./EarthShineGen --report-only                # rate only, no events
 ```
 
-Two files come out: `events.lhe` and `earthshinegen_report.txt`.
+Three files come out: `events.lhe`, `events.hepmc` and
+`earthshinegen_report.txt`. See [Output formats](#output-formats) for which of
+the two event files you want.
 
 ## What it computes
 
@@ -48,7 +51,7 @@ prints the whole chain and the cut flow.
 
 ## Differences from the packages it merges
 
-These are deliberate. Each one is either a dependency the gridpack could not
+These are deliberate. Each one is either a dependency the runtime could not
 carry, or a physics point worth raising.
 
 **No TensorFlow.** EarthShine draws the decay with `phasespace`, which needs
@@ -56,8 +59,9 @@ TensorFlow. `A' -> mu+ mu-` is a two-body decay of a spinless resonance, so it
 is done analytically here. The self-tests check four-momentum conservation, the
 muon mass shell and the reconstructed `m_A`.
 
-**No pandas, no parquet.** The gridpack runtime ships numpy, scipy and pandas
-but not pyarrow, so parquet is unreadable inside a job. The Earth model and the
+**No pandas, no parquet.** The runtime this has to work inside ships numpy,
+scipy and pandas but not pyarrow, so parquet is unreadable there. The Earth
+model and the
 branching-ratio tables are read from csv with hand-rolled readers, and the only
 runtime dependencies are numpy and scipy.
 
@@ -224,18 +228,56 @@ with the correct pair kinematics and the correct absolute rate.
 
 Two caveats for the `detector` stage:
 
-* LHE has one vertex per event, and the two muons cross the surface at two
-  different points. The event vertex is written at their midpoint, and all
-  three positions plus the decay point go into comment lines that
-  `LHEEventProduct::comments()` preserves. See `gridpack/run3_fragment.py` for
-  what a vertex producer needs to do with them. **A GEN-SIM job that does not
-  read them will put the muons at the interaction point flying outward, which
-  is not the signal.**
+* The two muons cross the surface at two different points, and **LHE** has one
+  vertex per event. In the LHE file the event vertex is written at their
+  midpoint, and all three positions plus the decay point go into comment lines
+  that a reader has to be taught to parse. **A simulation that does not read
+  them will put the muons at the interaction point flying outward, which is not
+  the signal.** The **HepMC** file has no such problem: each muon carries its
+  own production vertex. See [Output formats](#output-formats).
 * The `A'` line in the record is the reconstructed pair four-vector. After the
   two muons lose different amounts of energy in the rock, that is no longer an
   on-shell 0.23 GeV dark photon. The record stays momentum-conserving; the mass
   field simply reports the invariant mass of what arrived. Use `stage vertex`
   if you want the resonance.
+
+## Output formats
+
+`output_format` picks between `lhe`, `hepmc` and `both` (the default). The two
+files describe the same events; they differ in what they can say about where
+those events happened.
+
+| | LHE | HepMC |
+|---|---|---|
+| vertices | one per event, and no field for it | one per particle |
+| the two muon entry points | comment lines a producer has to be written to read | the muons' own production vertices |
+| needs a parton shower in the chain | yes, as a pass-through | no |
+
+`hepmc_version` picks the flavour. **2** (the default) is the
+`HepMC::IO_GenEvent` ASCII flavour, still what most detector simulations read
+from a file. **3** is `HepMC::Asciiv3`, for Rivet and the HepMC3 tools. The two
+carry the same event -- same particles, same ids, same statuses, same vertices
+-- and a test asserts it.
+
+The record, for `stage detector` and the default `hepmc_topology split`:
+
+```
+V-1  the A' decay point         mock beams in, A' out                (status 4, 3)
+V-2  the same point             A' in, the two muons as produced out (status 3)
+V-3  where muon 1 crosses       muon 1 as produced in, as it arrives out (status 1)
+V-4  where muon 2 crosses       the same for muon 2
+```
+
+Four-momentum is deliberately not conserved at V-3 and V-4: that difference is
+the energy the muon left in the rock. Status 3 means "decayed by the generator,
+do not propagate", so a simulation starts the two arriving muons at the
+hand-off surface and takes nothing else as a primary. With status 2 it would
+instead try to track a muon from the decay point, a kilometre underground.
+
+`hepmc_topology single` collapses the record to one vertex at the midpoint of
+the two crossings, reproducing the LHE event one for one. It throws away the
+per-muon geometry, which with `ms_model highland` is metres, and exists mostly
+as the reference for the LHE/HepMC equivalence test.
 
 ## Describing the detector
 
@@ -275,7 +317,7 @@ defaults.
 
 `./EarthShineGen --write-card parameter.txt` writes every parameter at its
 default with a one-line explanation. It is a `key  value` file, not a
-positional one, so the gridpack scripts edit it by name:
+positional one, so it can be edited by name rather than by line number:
 
 ```bash
 sed -i "s|^m_X .*|m_X  10000|" parameter.txt
@@ -283,28 +325,6 @@ sed -i "s|^m_X .*|m_X  10000|" parameter.txt
 
 Every key is also a command-line option, and the command line wins over the
 card. `./EarthShineGen --help` lists them.
-
-## Gridpacks
-
-Same shape as the BlackMax and Charybdis gridpacks in
-`~/BlackHole/test_exo_bh_gridpacks`. Nothing is compiled, so the build is quick.
-
-```bash
-cd gridpack
-
-# generic: the parameter point is passed at run time through the fragment
-./earthshinegen_gridpack.sh run3
-
-# specific: the point is baked into parameter.txt
-./earthshinegen_gridpack.sh run3 7000 0.23 1e-8 max core
-```
-
-That produces `earthshinegen_gridpack_run3.tar.xz` containing `runcmsgrid.sh`
-and the `EarthShineGen/` tree. `gridpack/earthshinegen.py` is the
-`ExternalLHEProducer` snippet for the generic case and
-`gridpack/run3_fragment.py` is the GEN fragment.
-
-The build runs a ten-event smoke test before packing.
 
 ## Tests
 
@@ -318,9 +338,30 @@ The comparison script looks for DarkCapPy in `$DARKCAPPY_DIR`, falling back to
 
 `run_tests.py` covers the decay kinematics, the depth sampling against its
 analytic mean, the energy loss against the EarthShine reference, the geometry,
-the detector sizing and its validation, the rate scaling, the LHE record, and
-an end-to-end run in every model and stage. `validate_against_darkcappy.py` compares the Earth model shell by shell
-and every rate quantity against the DarkCapPy package itself.
+the detector sizing and its validation, the rate scaling, the LHE record, the
+HepMC record (including that the two formats agree event for event, and that
+switching HepMC on leaves the LHE events byte for byte unchanged), and an
+end-to-end run in every model and stage. `validate_against_darkcappy.py`
+compares the Earth model shell by shell and every rate quantity against the
+DarkCapPy package itself.
+
+`run_tests.py` runs on GitHub Actions on every push and pull request, on
+Python 3.9 and 3.13.
+
+### Reading the HepMC 3 output back with the HepMC3 library
+
+```bash
+./test/hepmc3/check_with_hepmc3.sh
+```
+
+The HepMC writers are hand-rolled, because the only dependencies here are numpy
+and scipy, so the thing worth checking is that the bytes really are HepMC. This
+compiles a small reader against the actual HepMC3 library and diffs what it
+reads against an independent parse of the same file: every particle, at 15
+significant digits, momenta and production vertices. It finds HepMC3 through
+`HepMC3-config` on `PATH`, `HEPMC3_DIR`, or a system install
+(`libhepmc3-dev`), and skips with a message if there is none; CI sets
+`REQUIRE_HEPMC3=1` so a missing library fails there instead of quietly passing.
 
 ## Layout
 
@@ -337,14 +378,18 @@ earthshinegen/
   geometry.py              decay points and the detector cylinders
   eloss.py                 muon energy loss in the overburden
   lhe.py                   Les Houches output
+  hepmc.py                 HepMC 2 and HepMC 3 output
   generator.py             the event loop
 data/
   PREM500_Mod.csv          Earth structure and composition
   EarthDMVelDist.csv       dark matter velocity distribution
   br_mumu.csv              BR(A' -> mu mu), digitised from Buschmann  et al.
   br_ee.csv                BR(A' -> e e)
-gridpack/                  gridpack build, runcmsgrid drivers, CMSSW fragments
-test/                      self-tests and the DarkCapPy comparison
+test/
+  run_tests.py             the self-tests; numpy and scipy only
+  validate_against_darkcappy.py
+  hepmc3/                  reading the HepMC 3 output back with the HepMC3 library
+.github/workflows/         CI: the self-tests, and the HepMC3 read-back
 ```
 
 ## References
