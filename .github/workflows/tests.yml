@@ -27,8 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.9 is the oldest we claim; 3.13 is what a fresh install gets.  The
-        # gridpack runtime sits between the two.
+        # 3.9 is the oldest we claim; 3.13 is what a fresh install gets.
         python-version: ['3.9', '3.13']
     steps:
       - uses: actions/checkout@v4

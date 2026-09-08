@@ -188,7 +188,7 @@ def test_exponential_favours_the_deep_end():
 
 @test
 def test_eloss_matches_earthshine_reference():
-    """propagate_running must reproduce EarthShine's propagate_muon_CMSSW.
+    """propagate_running must reproduce EarthShine's eloss_average routine.
 
     Same closed form, same coefficients; the only difference is the clamp at
     zero, so the comparison is restricted to muons that survive.

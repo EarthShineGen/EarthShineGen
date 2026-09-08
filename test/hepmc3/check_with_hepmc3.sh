@@ -6,8 +6,8 @@
 #   ./test/hepmc3/check_with_hepmc3.sh [file.hepmc3]
 #
 # With no argument a small sample is generated first.  Needs HepMC3 on the
-# system, found in this order: HepMC3-config on PATH, HEPMC3_DIR, a cvmfs
-# software distribution, a distribution install (libhepmc3-dev).
+# system, found in this order: HepMC3-config on PATH, HEPMC3_DIR pointing at an
+# install prefix, a distribution install (libhepmc3-dev).
 #
 # With no HepMC3 anywhere this exits 0 with a SKIP, so it can be dropped into a
 # test run on a machine that does not have it.  Set REQUIRE_HEPMC3=1 -- as CI
@@ -29,24 +29,6 @@ CONFIG=$(command -v HepMC3-config || true)
 if [ -z "${CONFIG}" ] && [ -n "${HEPMC3_DIR:-}" ]; then
     CONFIG="${HEPMC3_DIR}/bin/HepMC3-config"
 fi
-if [ -z "${CONFIG}" ] || [ ! -x "${CONFIG}" ]; then
-    # cvmfs.  The platform has to be pinned: the tree carries ppc64le and
-    # aarch64 builds alongside the x86_64 one, and picking the wrong one gets
-    # you an "incompatible library, cannot find -lHepMC3" from the linker
-    # rather than anything informative.  It also spells x86_64 as amd64, which
-    # uname does not.
-    case "$(uname -m)" in
-        x86_64) machine=amd64 ;;
-        *)      machine=$(uname -m) ;;
-    esac
-    for arch in "${SCRAM_ARCH:-}" "el9_${machine}_gcc14" "el8_${machine}_gcc14"; do
-        [ -n "${arch}" ] || continue
-        CONFIG=$(ls -d "/cvmfs/cms.cern.ch/${arch}/external/hepmc3/"*/bin/HepMC3-config \
-                 2>/dev/null | tail -1 || true)
-        [ -n "${CONFIG}" ] && break
-    done
-fi
-
 if [ -n "${CONFIG}" ] && [ -x "${CONFIG}" ]; then
     CXXFLAGS=$(${CONFIG} --cxxflags)
     LDFLAGS=$(${CONFIG} --ldflags)
@@ -63,7 +45,8 @@ elif [ -n "${REQUIRE_HEPMC3:-}" ]; then
     echo "ERROR: REQUIRE_HEPMC3 is set but no HepMC3 installation was found" >&2
     exit 1
 else
-    echo "SKIP: no HepMC3 installation found (set HEPMC3_DIR)" >&2
+    echo "SKIP: no HepMC3 found.  Put HepMC3-config on PATH, or set" >&2
+    echo "      HEPMC3_DIR to an install prefix, or install libhepmc3-dev." >&2
     exit 0
 fi
 

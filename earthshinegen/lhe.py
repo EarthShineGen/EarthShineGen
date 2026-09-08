@@ -1,7 +1,7 @@
 """Les Houches Event output.
 
-Adapted from EarthShine's event_writer.write_lhe, trimmed to what the gridpack
-needs and extended so that the per-muon entry points survive into the file.
+Adapted from EarthShine's event_writer.write_lhe, trimmed to what is actually
+needed and extended so that the per-muon entry points survive into the file.
 
 The LHE format has no field for a production vertex, which matters here because
 the whole point of the signal is a pair of muons entering the detector from

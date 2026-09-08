@@ -1,10 +1,9 @@
 """The parameter card.
 
-BlackMax and Charybdis are driven by a positional parameter.txt that the
-gridpack edits with `sed -i '8s/.*/${MD}/'`.  That works, but it means the
-gridpack scripts encode line numbers and break the moment a comment is added.
-EarthShineGen uses a `key  value` card instead, so the gridpack edits it by
-name:
+BlackMax and Charybdis are driven by a positional parameter.txt that their
+driver scripts edit with `sed -i '8s/.*/${MD}/'`.  That works, but it means
+those scripts encode line numbers and break the moment a comment is added.
+EarthShineGen uses a `key  value` card instead, so it is edited by name:
 
     sed -i "s|^m_X .*|m_X  ${MX}|" parameter.txt
 

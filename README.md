@@ -17,10 +17,6 @@ dependencies are numpy and scipy, so nothing here is tied to a particular
 experiment. It writes Les Houches events and HepMC 2 or 3; HepMC -- unlike LHE
 -- can say where each of the two muons entered the detector.
 
-Nothing in this repository mentions an experiment. Everything that does --
-CMSSW cfgs, the GEN-SIM step, the gridpack build -- lives in
-[InterfaceWithExperiments](https://github.com/EarthShineGen/InterfaceWithExperiments).
-
 ## Quick start
 
 ```bash
@@ -55,7 +51,7 @@ prints the whole chain and the cut flow.
 
 ## Differences from the packages it merges
 
-These are deliberate. Each one is either a dependency the gridpack could not
+These are deliberate. Each one is either a dependency the runtime could not
 carry, or a physics point worth raising.
 
 **No TensorFlow.** EarthShine draws the decay with `phasespace`, which needs
@@ -63,8 +59,9 @@ TensorFlow. `A' -> mu+ mu-` is a two-body decay of a spinless resonance, so it
 is done analytically here. The self-tests check four-momentum conservation, the
 muon mass shell and the reconstructed `m_A`.
 
-**No pandas, no parquet.** The gridpack runtime ships numpy, scipy and pandas
-but not pyarrow, so parquet is unreadable inside a job. The Earth model and the
+**No pandas, no parquet.** The runtime this has to work inside ships numpy,
+scipy and pandas but not pyarrow, so parquet is unreadable there. The Earth
+model and the
 branching-ratio tables are read from csv with hand-rolled readers, and the only
 runtime dependencies are numpy and scipy.
 
@@ -234,12 +231,10 @@ Two caveats for the `detector` stage:
 * The two muons cross the surface at two different points, and **LHE** has one
   vertex per event. In the LHE file the event vertex is written at their
   midpoint, and all three positions plus the decay point go into comment lines
-  that `LHEEventProduct::comments()` preserves. See `cmssw/gridpack/run3_fragment.py`
-  in the interface repository for what a vertex producer needs to do with them. **A GEN-SIM job that does
-  not read them will put the muons at the interaction point flying outward,
-  which is not the signal.** The **HepMC** file has no such problem: each muon
-  carries its own production vertex and CMSSW reads them with no extra code.
-  See [Output formats](#output-formats).
+  that a reader has to be taught to parse. **A simulation that does not read
+  them will put the muons at the interaction point flying outward, which is not
+  the signal.** The **HepMC** file has no such problem: each muon carries its
+  own production vertex. See [Output formats](#output-formats).
 * The `A'` line in the record is the reconstructed pair four-vector. After the
   two muons lose different amounts of energy in the rock, that is no longer an
   on-shell 0.23 GeV dark photon. The record stays momentum-conserving; the mass
@@ -256,13 +251,11 @@ those events happened.
 |---|---|---|
 | vertices | one per event, and no field for it | one per particle |
 | the two muon entry points | comment lines a producer has to be written to read | the muons' own production vertices |
-| read by | `ExternalLHEProducer`, gridpacks, McM | `MCFileSource`, no extra code |
-| Pythia in the chain | yes, as a pass-through | no |
+| needs a parton shower in the chain | yes, as a pass-through | no |
 
 `hepmc_version` picks the flavour. **2** (the default) is the
-`HepMC::IO_GenEvent` ASCII flavour, and it is the only file format CMSSW can
-read: the release has no HepMC3 file input source, only HepMC3 hadronizer
-interfaces. **3** is `HepMC::Asciiv3`, for Rivet and the HepMC3 tools. The two
+`HepMC::IO_GenEvent` ASCII flavour, still what most detector simulations read
+from a file. **3** is `HepMC::Asciiv3`, for Rivet and the HepMC3 tools. The two
 carry the same event -- same particles, same ids, same statuses, same vertices
 -- and a test asserts it.
 
@@ -276,23 +269,15 @@ V-4  where muon 2 crosses       the same for muon 2
 ```
 
 Four-momentum is deliberately not conserved at V-3 and V-4: that difference is
-the energy the muon left in the rock. The status codes are the ones
-`SimG4Core/Generators` reads -- 3 means "decayed by the generator, do not
-propagate" -- so GEANT starts the two arriving muons at the hand-off surface
-and takes nothing else as a primary. With status 2 it would instead try to
-track a muon from the decay point, a kilometre underground.
+the energy the muon left in the rock. Status 3 means "decayed by the generator,
+do not propagate", so a simulation starts the two arriving muons at the
+hand-off surface and takes nothing else as a primary. With status 2 it would
+instead try to track a muon from the decay point, a kilometre underground.
 
 `hepmc_topology single` collapses the record to one vertex at the midpoint of
 the two crossings, reproducing the LHE event one for one. It throws away the
 per-muon geometry, which with `ms_model highland` is metres, and exists mostly
 as the reference for the LHE/HepMC equivalence test.
-
-Running the HepMC file through CMSSW -- cfgs, GEN-SIM, and the validation
-that CMSSW gets back what was written -- lives in a separate repository,
-[InterfaceWithExperiments](https://github.com/EarthShineGen/InterfaceWithExperiments),
-so that this one stays experiment-neutral. Note that `ExternalLHEProducer`
-cannot consume HepMC, so the HepMC route is a standalone generation step
-feeding `MCFileSource`, not a gridpack drop-in.
 
 ## Describing the detector
 
@@ -341,19 +326,6 @@ sed -i "s|^m_X .*|m_X  10000|" parameter.txt
 Every key is also a command-line option, and the command line wins over the
 card. `./EarthShineGen --help` lists them.
 
-## Gridpacks
-
-Gridpacks are a CMS thing -- `ExternalLHEProducer`, `cmsrel`, McM -- so the
-build script and the fragments live in
-[InterfaceWithExperiments](https://github.com/EarthShineGen/InterfaceWithExperiments),
-under `cmssw/gridpack/`. It stages this package into a tarball and needs
-nothing from here but the path:
-
-```bash
-export EARTHSHINEGEN=$PWD/EarthShineGen
-.../InterfaceWithExperiments/cmssw/gridpack/earthshinegen_gridpack.sh run3
-```
-
 ## Tests
 
 ```bash
@@ -382,21 +354,14 @@ Python 3.9 and 3.13.
 ./test/hepmc3/check_with_hepmc3.sh
 ```
 
-The HepMC writers are hand-rolled, because the gridpack runtime has numpy and
-scipy and nothing else, so the thing worth checking is that the bytes really
-are HepMC. This compiles a small reader against the actual HepMC3 library and
-diffs what it reads against an independent parse of the same file: every
-particle, at 15 significant digits, momenta and production vertices. It needs
-HepMC3 (`cmsenv` in any CMSSW area is enough, or `libhepmc3-dev`) and skips
-with a message if there is none; CI sets `REQUIRE_HEPMC3=1` so a missing
-library fails there instead of quietly passing.
-
-### Reading it back with CMSSW
-
-That is the other repository:
-[InterfaceWithExperiments](https://github.com/EarthShineGen/InterfaceWithExperiments)
-has the `MCFileSource` cfgs, the GEN-SIM step, and the checks that what CMSSW
-holds is what the generator wrote.
+The HepMC writers are hand-rolled, because the only dependencies here are numpy
+and scipy, so the thing worth checking is that the bytes really are HepMC. This
+compiles a small reader against the actual HepMC3 library and diffs what it
+reads against an independent parse of the same file: every particle, at 15
+significant digits, momenta and production vertices. It finds HepMC3 through
+`HepMC3-config` on `PATH`, `HEPMC3_DIR`, or a system install
+(`libhepmc3-dev`), and skips with a message if there is none; CI sets
+`REQUIRE_HEPMC3=1` so a missing library fails there instead of quietly passing.
 
 ## Layout
 

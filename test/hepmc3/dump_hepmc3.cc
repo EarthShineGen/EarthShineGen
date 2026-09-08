@@ -1,10 +1,10 @@
 // Dump a HepMC3 file with the real HepMC3 library, in a canonical form that
 // can be diffed against what EarthShineGen thinks it wrote.
 //
-// EarthShineGen writes HepMC by hand -- the gridpack runtime has numpy and
-// scipy and nothing else -- so the thing worth checking is that the bytes it
-// produces are what the library reads back.  This is the other half of that
-// check; canonical_dump.py produces the same lines from the file directly.
+// EarthShineGen writes HepMC by hand -- its only dependencies are numpy and
+// scipy -- so the thing worth checking is that the bytes it produces are what
+// the library reads back.  This is the other half of that check;
+// canonical_dump.py produces the same lines from the file directly.
 //
 //   ./check_with_hepmc3.sh events.hepmc3
 //
