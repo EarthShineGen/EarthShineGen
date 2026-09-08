@@ -100,8 +100,19 @@ SCHEMA = [
     # --- output ----------------------------------------------------------
     ('stage', str, 'detector',
      "'detector' (propagate to the hand-off surface) or 'vertex' (decay point)"),
+    ('output_format', str, 'both',
+     "'lhe', 'hepmc' or 'both'; HepMC is what CMSSW's MCFileSource reads, and "
+     'it is the only one of the two that can carry a vertex per muon'),
     ('output_file', str, 'events.lhe',
      'output LHE file'),
+    ('hepmc_file', str, 'events.hepmc',
+     'output HepMC file'),
+    ('hepmc_version', str, '2',
+     "'2' (IO_GenEvent ASCII; the only one CMSSW reads from a file) or "
+     "'3' (Asciiv3; Rivet and the HepMC3 tools)"),
+    ('hepmc_topology', str, 'split',
+     "'split' (each muon produced at its own crossing of the hand-off "
+     "surface) or 'single' (one vertex, the LHE record one for one)"),
     ('report_file', str, 'earthshinegen_report.txt',
      "human-readable rate report; '' to skip"),
     ('include_initial', int, 1,
@@ -191,6 +202,9 @@ def _validate(v):
                          ('eloss_model', ('running', 'constant', 'none')),
                          ('ms_model', ('none', 'highland')),
                          ('stage', ('detector', 'vertex')),
+                         ('output_format', ('lhe', 'hepmc', 'both')),
+                         ('hepmc_topology', ('split', 'single')),
+                         ('hepmc_version', ('2', '3')),
                          ('kappa_method', ('fast', 'dblquad')),
                          ('require_hit', ('none', 'detector',
                                           'inner_detector')),
@@ -271,8 +285,10 @@ def write_template(path):
                          'rock_radiation_length')),
         ('rate', ('decay_length_convention', 'livetime_years',
                   'kappa_method')),
-        ('output', ('stage', 'output_file', 'report_file', 'include_initial',
-                    'include_mother', 'beam_energy', 'verbose')),
+        ('output', ('stage', 'output_format', 'output_file', 'hepmc_file',
+                    'hepmc_version', 'hepmc_topology', 'report_file',
+                    'include_initial', 'include_mother', 'beam_energy',
+                    'verbose')),
     ]
     with open(path, 'w') as fh:
         fh.write('# EarthShineGen parameter card\n'

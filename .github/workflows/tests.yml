@@ -1,0 +1,81 @@
+name: tests
+
+# Kept deliberately small.  GitHub Actions is free without limit on public
+# repositories, but the budget that actually matters is the reviewer's
+# patience, so: no cron, nothing on documentation-only changes, in-flight runs
+# for a branch cancelled when a new commit lands, and two Python versions
+# rather than the whole matrix -- the oldest supported and the current one.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'study/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'study/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: self-tests, python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the oldest we claim; 3.13 is what a fresh install gets.  The
+        # gridpack runtime sits between the two.
+        python-version: ['3.9', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: install numpy and scipy
+        run: python -m pip install --upgrade pip numpy scipy
+
+      - name: self-tests
+        run: python test/run_tests.py
+
+      - name: the card round-trips through the executable
+        run: |
+          python ./EarthShineGen --write-card /tmp/card.txt
+          diff -u parameter.txt /tmp/card.txt
+
+  hepmc3:
+    name: HepMC 3 read back by the HepMC3 library
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: install numpy, scipy and HepMC3
+        run: |
+          python -m pip install --upgrade pip numpy scipy
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libhepmc3-dev
+
+      # REQUIRE_HEPMC3 turns the "no HepMC3 here, skipping" exit into a
+      # failure.  Without it a CI job with a broken HepMC3 install would go
+      # green having checked nothing.
+      - name: read the file back with the real library
+        env:
+          REQUIRE_HEPMC3: '1'
+        run: ./test/hepmc3/check_with_hepmc3.sh

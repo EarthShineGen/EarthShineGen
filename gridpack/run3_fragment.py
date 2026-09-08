@@ -40,6 +40,12 @@ ProductionFilterSequence = cms.Sequence(generator)
 # ---------------------------------------------------------------------------
 # Read this before running the detector stage through GEN-SIM.
 #
+# Everything below is about the LHE route.  If you do not need a gridpack,
+# there is now a shorter way: run EarthShineGen with output_format hepmc and
+# feed the file to MCFileSource, which carries a production vertex per muon and
+# needs none of the machinery described here.  The cfgs for that route live
+# in the InterfaceWithExperiments repository.
+#
 # EarthShineGen's 'detector' stage puts each muon pair on the hand-off surface
 # around the detector (by default the detector's own outer cylinder, whose size
 # is set on the parameter card), travelling inward and upward -- the same kind

@@ -106,7 +106,8 @@ chmod +x runcmsgrid.sh
 # worth shipping.
 echo "Smoke test..."
 ( cd EarthShineGen && ./EarthShineGen --n_events 10 --seed 1 \
-    --output_file /dev/null --report_file '' --max_trials 2000000 >/dev/null )
+    --output_format both --output_file /dev/null --hepmc_file /dev/null \
+    --report_file '' --max_trials 2000000 >/dev/null )
 echo "Smoke test passed"
 
 # Drop the byte code the smoke test just produced: it is tied to this python

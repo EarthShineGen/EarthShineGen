@@ -58,8 +58,12 @@ echo "-------------------------"
 
 echo "Running the event generation"
 # cmsgrid_final.lhe is the name ExternalLHEProducer expects; the
-# generator's own default is the neutral events.lhe.
-./EarthShineGen --output_file cmsgrid_final.lhe --report_file earthshinegen_report.txt
+# generator's own default is the neutral events.lhe.  output_format
+# is pinned to lhe because this is the LHE route: ExternalLHEProducer
+# cannot read HepMC, so the card default 'both' would only leave an
+# unused file behind.  For the HepMC route see
+# gridpack/mcfilesource_fragment.py.
+./EarthShineGen --output_format lhe --output_file cmsgrid_final.lhe --report_file earthshinegen_report.txt
 echo "Event generation finished"
 
 cat earthshinegen_report.txt
