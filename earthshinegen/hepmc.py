@@ -24,17 +24,22 @@ same convention lhe.py uses for its comment lines.
 The record, for `stage = detector` and the default `split` topology:
 
     V-1   at the A' decay point in the rock
-            in   the mock beams (if include_initial)
-            out  the A' (if include_mother)
-    V-2   at the same point
-            in   the A'
+            in   the A' (if include_mother), with no production vertex
             out  the two muons as produced
-    V-3   where muon 1 crosses the hand-off surface
+    V-2   where muon 1 crosses the hand-off surface
             in   muon 1 as produced
             out  muon 1 as it arrives, after the energy loss
-    V-4   the same for muon 2
+    V-3   the same for muon 2
 
-Four-momentum is deliberately not conserved at V-3 and V-4: that difference is
+The A' deliberately has no production vertex.  The mock incoming pair that
+lhe.py writes exists only because LHE demands an initial state; carrying it
+into HepMC would force a production vertex, and the only place to put it would
+be the decay point itself, giving the A' a zero-length flight path that means
+nothing.  The real production point is wherever the dark matter annihilated --
+for the core model the centre of the Earth -- and this generator does not model
+that flight at all: it samples the decay point directly.
+
+Four-momentum is deliberately not conserved at V-2 and V-3: that difference is
 the energy the muon left in the rock.  HepMC does not check, and there is no
 parton shower in this chain, so nothing rejects it.  The status-1 muons -- the
 only ones a detector simulation will track -- therefore start exactly on the
@@ -76,7 +81,6 @@ HEPMC3_END_KEY = 'HepMC::Asciiv3-END_EVENT_LISTING\n'
 #   2  decayed by the generator, but still propagated, and handed over with a
 #      predefined decay if its end vertex is far enough out
 #   3  decayed by the generator, and must NOT be propagated
-#   4  beam particle
 #
 # The intermediates here are 3, not the 2 a collider generator would use, and
 # the difference is not cosmetic.  The A' and the muons as produced live at the
@@ -86,7 +90,6 @@ HEPMC3_END_KEY = 'HepMC::Asciiv3-END_EVENT_LISTING\n'
 # Status 3 says what is actually true, that the generator has already done that
 # propagation, so only the two status-1 muons at the hand-off surface are
 # tracked.  The codes mean the same in HepMC 3.
-STATUS_BEAM = 4
 STATUS_INTERMEDIATE = 3
 STATUS_FINAL = 1
 
@@ -168,15 +171,12 @@ class _HepMCWriterBase(object):
                  max_weight=1.0, topology='split',
                  muon_pdgids=(k.MUON_PDGID, -k.MUON_PDGID),
                  aprime_pdgid=k.DARKPHOTON_PDGID,
-                 include_initial=True, include_mother=True,
-                 initial_pdgids=(11, -11)):
+                 include_mother=True):
         self.path = path
         self.topology = topology
         self.muon_pdgids = muon_pdgids
         self.aprime_pdgid = aprime_pdgid
-        self.include_initial = include_initial
         self.include_mother = include_mother
-        self.initial_pdgids = initial_pdgids
         self.n_events = 0
 
         self._xsec = (xsec_pb, xsec_err_pb)
@@ -233,52 +233,23 @@ class _HepMCWriterBase(object):
 
         vertices = []
         next_vertex = -1
-        beams = (0, 0)
 
-        production = _Vertex(next_vertex, origin_mm)
+        decay = _Vertex(next_vertex, origin_mm)
         next_vertex -= 1
-        vertices.append(production)
-
-        if self.include_mother and self.include_initial:
-            # The mock beams cannot be incoming to the same vertex the A' is
-            # incoming to, so they get their own vertex at the same point.
-            # They exist only because LHE demands an initial state; nothing in
-            # the HepMC chain needs them, and include_initial 0 drops them.
-            decay = _Vertex(next_vertex, origin_mm)
-            next_vertex -= 1
-            vertices.append(decay)
-        else:
-            decay = production
-
-        if self.include_initial:
-            pmag = float(np.sqrt(P[0] ** 2 + P[1] ** 2 + P[2] ** 2))
-            if pmag <= 0.0:
-                raise ValueError('event with zero total three-momentum')
-            n_hat = P[:3] / pmag
-            # The same massless light-cone split lhe.py uses: the two mock
-            # incoming momenta add up to P exactly and are both on the massless
-            # shell.
-            ea = 0.5 * (P[3] + pmag)
-            eb = 0.5 * (P[3] - pmag)
-            for pdg, energy, sign in ((self.initial_pdgids[0], ea, 1.0),
-                                      (self.initial_pdgids[1], eb, -1.0)):
-                production.add_in(_Particle(
-                    0, pdg,
-                    np.array([sign * energy * n_hat[0],
-                              sign * energy * n_hat[1],
-                              sign * energy * n_hat[2], energy]),
-                    0.0, STATUS_BEAM))
+        vertices.append(decay)
 
         if self.include_mother:
-            aprime = _Particle(0, self.aprime_pdgid, P, mA,
-                               STATUS_INTERMEDIATE)
-            if decay is production:
-                # No beams, so the A' has no production vertex and is written
-                # as an orphan incoming particle of its own decay vertex.
-                decay.add_in(aprime)
-            else:
-                production.add_out(aprime)
-                decay.add_in(aprime)
+            # The A' is written as an incoming particle of its own decay vertex
+            # and given no production vertex.  That is the honest record: this
+            # generator never models the A' flight.  It samples the decay point
+            # directly, and the real production point is wherever the dark
+            # matter annihilated -- for the core model the centre of the Earth,
+            # thousands of km down and many decay lengths away.  Inventing a
+            # production vertex at the decay point, which is what an LHE-style
+            # mock initial state forces, would put a zero-length flight path in
+            # the file and invite anyone downstream to measure it.
+            decay.add_in(_Particle(0, self.aprime_pdgid, P, mA,
+                                   STATUS_INTERMEDIATE))
 
         # The muons.  In the split record each one is produced at the decay
         # vertex, ends at its own crossing vertex, and is re-emitted there with
@@ -310,11 +281,8 @@ class _HepMCWriterBase(object):
             for particle in vertex.orphans_in + vertex.out:
                 barcode += 1
                 particle.barcode = barcode
-        if self.include_initial:
-            orphans = production.orphans_in
-            beams = (orphans[0].barcode, orphans[1].barcode)
 
-        return vertices, beams, decay.barcode, mA
+        return vertices, (0, 0), decay.barcode, mA
 
     def write_event(self, p1, p2, vertex_m, vertex1_m=None, vertex2_m=None,
                     decay_vertex_m=None, p1_raw=None, p2_raw=None,

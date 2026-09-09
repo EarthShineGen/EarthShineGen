@@ -425,7 +425,6 @@ def _open_writers(p, rate_info):
             version=p['hepmc_version'],
             xsec_pb=xsec, xsec_err_pb=0.0, max_weight=1.0,
             topology=p['hepmc_topology'],
-            include_initial=bool(p['include_initial']),
             include_mother=bool(p['include_mother'])))
 
     return writers

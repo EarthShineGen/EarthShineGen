@@ -106,18 +106,21 @@ SCHEMA = [
      'output LHE file'),
     ('hepmc_file', str, 'events.hepmc',
      'output HepMC file'),
-    ('hepmc_version', str, '2',
-     "'2' (IO_GenEvent ASCII, what most detector simulations read from a "
-     "file) or '3' (Asciiv3, for Rivet and the HepMC3 tools)"),
+    ('hepmc_version', str, '3',
+     "'3' (Asciiv3, the current format) or '2' (IO_GenEvent ASCII, for "
+     'readers that predate HepMC 3)'),
     ('hepmc_topology', str, 'split',
      "'split' (each muon produced at its own crossing of the hand-off "
      "surface) or 'single' (one vertex, the LHE record one for one)"),
     ('report_file', str, 'earthshinegen_report.txt',
      "human-readable rate report; '' to skip"),
     ('include_initial', int, 1,
-     'write two mock incoming particles into each event'),
+     'write two mock incoming particles into each event.  LHE only: LHE '
+     'requires an initial state, HepMC does not, and in HepMC the pair would '
+     'force a meaningless production vertex on the A\''),
     ('include_mother', int, 1,
-     "write the A' as a status-2 intermediate particle"),
+     "write the A' as an intermediate particle (LHE status 2, HepMC status "
+     '3)'),
     ('beam_energy', float, 6800.0,
      'beam energy quoted in the <init> block [GeV]'),
     ('verbose', int, 0,
