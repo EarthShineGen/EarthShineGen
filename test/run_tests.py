@@ -647,7 +647,7 @@ def _parse_hepmc3(path):
                 incoming = rest[2].strip('[]')
                 current['vertices'][int(rest[0])] = {
                     'position': np.array([float(v)
-                                          for v in rest[at + 1:at + 4]]),
+                                          for v in rest[at + 1:at + 5]]),
                     'incoming': [int(v) for v in incoming.split(',') if v],
                 }
             elif tag == 'P':
@@ -660,11 +660,35 @@ def _parse_hepmc3(path):
                     'status': int(rest[8]),
                     'production_vertex': vertex if vertex else None,
                 })
-    # give every event a flat vertex map, like the HepMC 2 parser
+    # Give every event the same shape the HepMC 2 parser returns: a flat
+    # vertex map, and an end_vertex on each particle.  HepMC 3 states the
+    # second one the other way round -- the vertex lists what comes in -- so it
+    # is inverted here rather than left missing.
     for ev in events:
+        by_barcode = dict((p['barcode'], p) for p in ev['particles'])
+        for barcode, vertex in ev['vertices'].items():
+            for incoming in vertex['incoming']:
+                by_barcode[incoming]['end_vertex'] = barcode
+        for particle in ev['particles']:
+            particle.setdefault('end_vertex', 0)
         ev['vertices'] = dict((bc, v['position'])
                               for bc, v in ev['vertices'].items())
     return events
+
+
+def _parse_hepmc_any(path):
+    """Parse whichever flavour the file happens to be.
+
+    The default is HepMC 3, but a few tests below pin a version because they
+    are about one flavour specifically; this keeps the rest agnostic.
+    """
+    with open(path) as fh:
+        head = fh.read(4096)
+    if 'HepMC::Asciiv3' in head:
+        return _parse_hepmc3(path)
+    if 'HepMC::IO_GenEvent' in head:
+        return _parse_hepmc(path)
+    raise AssertionError('%s is neither HepMC 2 nor HepMC 3' % path)
 
 
 def _final_muons(event):
@@ -675,7 +699,7 @@ def _final_muons(event):
 def test_hepmc_record_is_self_consistent():
     tmpdir = tempfile.mkdtemp(prefix='earthshinegen_hepmc_')
     path = _run_generator(['--stage', 'detector'], tmpdir, hepmc=True)
-    events = _parse_hepmc(path)
+    events = _parse_hepmc_any(path)
     assert len(events) == 25, 'expected 25 HepMC events, got %d' % len(events)
 
     for ev in events:
@@ -684,8 +708,9 @@ def test_hepmc_record_is_self_consistent():
         assert len(ev['vertices']) == ev['n_vertices'], \
             'the E line claims %d vertices, the file has %d' \
             % (ev['n_vertices'], len(ev['vertices']))
-        assert ev['signal_vertex'] in ev['vertices'], \
-            'the signal process vertex is not in the file'
+        if 'signal_vertex' in ev:          # a HepMC 2 field only
+            assert ev['signal_vertex'] in ev['vertices'], \
+                'the signal process vertex is not in the file'
 
         barcodes = [p['barcode'] for p in ev['particles']]
         assert len(set(barcodes)) == len(barcodes), 'duplicate particle barcode'
@@ -703,9 +728,17 @@ def test_hepmc_record_is_self_consistent():
         # kilometre underground; the intermediates are status 3 to say that the
         # generator has already done that propagation.
         for p in ev['particles']:
-            assert p['status'] in (1, 3, 4), \
+            assert p['status'] in (1, 3), \
                 'particle %d has status %d; it would be propagated' \
                 % (p['barcode'], p['status'])
+
+        aprime = [p for p in ev['particles']
+                  if p['pdg'] == k.DARKPHOTON_PDGID]
+        assert len(aprime) == 1, "expected exactly one A'"
+        assert aprime[0]['production_vertex'] is None, \
+            "the A' was given a production vertex.  The generator does not " \
+            'model its flight, so the only place to put one is the decay ' \
+            'point again -- a zero-length flight path that means nothing.'
 
         muons = _final_muons(ev)
         assert len(muons) == 2, \
@@ -721,7 +754,7 @@ def test_hepmc_record_is_self_consistent():
 def test_hepmc_vertex_stage_reconstructs_the_dark_photon():
     tmpdir = tempfile.mkdtemp(prefix='earthshinegen_hepmcv_')
     path = _run_generator(['--stage', 'vertex'], tmpdir, hepmc=True)
-    for ev in _parse_hepmc(path):
+    for ev in _parse_hepmc_any(path):
         # nothing is degraded in the vertex stage, so there is one vertex per
         # structural element and no per-muon crossing vertex
         muons = _final_muons(ev)
@@ -759,7 +792,7 @@ def test_hepmc_split_topology_places_each_muon_at_its_own_crossing():
                 entries[-1].append(np.array([float(v)
                                              for v in line.split()[1:4]]))
 
-    events = _parse_hepmc(hepmc_path)
+    events = _parse_hepmc_any(hepmc_path)
     assert len(events) == len(entries) == 25, 'event counts disagree'
 
     separations = []
@@ -797,7 +830,7 @@ def test_hepmc_split_topology_places_each_muon_at_its_own_crossing():
 def test_hepmc_single_topology_matches_the_lhe_event_for_event():
     tmpdir = tempfile.mkdtemp(prefix='earthshinegen_single_')
     lhe_path = _run_generator(['--hepmc_topology', 'single'], tmpdir)
-    hepmc = _parse_hepmc(os.path.join(tmpdir, 'events.hepmc'))
+    hepmc = _parse_hepmc_any(os.path.join(tmpdir, 'events.hepmc'))
     lhe = _parse_lhe(lhe_path)
 
     vertices = []
@@ -874,7 +907,7 @@ def test_hepmc3_record_is_self_consistent():
             assert vertex is None or vertex in ev['vertices'], \
                 'particle %d is produced at vertex %r, which does not exist' \
                 % (p['barcode'], vertex)
-            assert p['status'] in (1, 3, 4), \
+            assert p['status'] in (1, 3), \
                 'particle %d has status %d' % (p['barcode'], p['status'])
 
         muons = _final_muons(ev)
@@ -919,8 +952,8 @@ def test_hepmc3_says_the_same_as_hepmc2():
                 'one flavour gave particle %d a production vertex and the ' \
                 'other did not' % p2['barcode']
             if v2 is not None:
-                # the HepMC 2 vertex line carries ctau as a fourth component
-                approx(ev2['vertices'][v2][:3], ev3['vertices'][v3], 1e-15,
+                # both carry a time as the fourth component
+                approx(ev2['vertices'][v2][:3], ev3['vertices'][v3][:3], 1e-15,
                        'production vertices disagree')
 
 
@@ -939,7 +972,7 @@ def test_hepmc_version_is_validated():
 def test_hepmc_only_writes_no_lhe():
     tmpdir = tempfile.mkdtemp(prefix='earthshinegen_hmconly_')
     path = _run_generator(['--output_format', 'hepmc'], tmpdir, hepmc=True)
-    assert len(_parse_hepmc(path)) == 25, 'HepMC-only run wrote no events'
+    assert len(_parse_hepmc_any(path)) == 25, 'HepMC-only run wrote no events'
     assert not os.path.exists(os.path.join(tmpdir, 'events.lhe')), \
         "output_format 'hepmc' still wrote an LHE file"
 
@@ -971,7 +1004,7 @@ def test_end_to_end_every_model_and_stage():
             '%s produced %d events, expected 25' % (' '.join(case), len(events))
         # the default card writes both formats, so every case exercises the
         # HepMC writer too
-        hepmc = _parse_hepmc(os.path.join(tmpdir, 'events.hepmc'))
+        hepmc = _parse_hepmc_any(os.path.join(tmpdir, 'events.hepmc'))
         assert len(hepmc) == 25, \
             '%s produced %d HepMC events, expected 25' \
             % (' '.join(case), len(hepmc))

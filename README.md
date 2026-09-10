@@ -253,26 +253,36 @@ those events happened.
 | the two muon entry points | comment lines a producer has to be written to read | the muons' own production vertices |
 | needs a parton shower in the chain | yes, as a pass-through | no |
 
-`hepmc_version` picks the flavour. **2** (the default) is the
-`HepMC::IO_GenEvent` ASCII flavour, still what most detector simulations read
-from a file. **3** is `HepMC::Asciiv3`, for Rivet and the HepMC3 tools. The two
-carry the same event -- same particles, same ids, same statuses, same vertices
--- and a test asserts it.
+`hepmc_version` picks the flavour. **3** (the default) is `HepMC::Asciiv3`,
+the current format. **2** is the older `HepMC::IO_GenEvent` ASCII flavour, for
+readers that predate HepMC 3. The two carry the same event -- same particles,
+same ids, same statuses, same vertices -- and a test asserts it.
 
 The record, for `stage detector` and the default `hepmc_topology split`:
 
 ```
-V-1  the A' decay point         mock beams in, A' out                (status 4, 3)
-V-2  the same point             A' in, the two muons as produced out (status 3)
-V-3  where muon 1 crosses       muon 1 as produced in, as it arrives out (status 1)
-V-4  where muon 2 crosses       the same for muon 2
+V-1  the A' decay point         A' in, the two muons as produced out    (status 3)
+V-2  where muon 1 crosses       muon 1 as produced in, as it arrives out (status 1)
+V-3  where muon 2 crosses       the same for muon 2
 ```
 
-Four-momentum is deliberately not conserved at V-3 and V-4: that difference is
+Four-momentum is deliberately not conserved at V-2 and V-3: that difference is
 the energy the muon left in the rock. Status 3 means "decayed by the generator,
 do not propagate", so a simulation starts the two arriving muons at the
 hand-off surface and takes nothing else as a primary. With status 2 it would
 instead try to track a muon from the decay point, a kilometre underground.
+
+**The A' has no production vertex, deliberately.** It is written as an incoming
+particle of its own decay vertex and nothing else. This generator never models
+the A' flight: it samples the decay point directly from the depth profile, and
+the real production point is wherever the dark matter annihilated -- for
+`dm_model core` the centre of the Earth, thousands of km down and many decay
+lengths away. The only production vertex that could be written without
+inventing physics is the decay point itself, which would give the A' a
+zero-length flight path and invite anyone downstream to measure it. So the
+`include_initial` mock pair, which LHE needs and which would force such a
+vertex, is not carried into the HepMC record at all; `include_initial` applies
+to the LHE file only.
 
 `hepmc_topology single` collapses the record to one vertex at the midpoint of
 the two crossings, reproducing the LHE event one for one. It throws away the
